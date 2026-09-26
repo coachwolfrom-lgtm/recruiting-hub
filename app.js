@@ -1,65 +1,68 @@
-let supabaseClient;
-try {
-    if (typeof SUPABASE_URL !== 'undefined' && typeof SUPABASE_ANON_KEY !== 'undefined') {
-        supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    } else {
-        console.error('config.js missing SUPABASE_URL / SUPABASE_ANON_KEY');
-    }
-} catch (e) {
-    console.error('Initialization error:', e);
-}
-
 function cloudApp() {
     return {
-        loading: true,
+        // State
+        activeTab: 'colleges',
+        loading: false,
         errorMessage: '',
-        toastMessage: '',
-        activeTab: 'schools',
-        search: '',
-        divisionFilter: '',
-        interestFilter: '',
-        majorFilter: '',
-        newMajorName: '',
+        
+        // Data collections
         athletes: [],
-        selectedAthleteId: 1,
-        currentAthlete: null,
-        schools: [],
+        selectedAthleteId: null,
         divisions: [],
         interestLevels: [],
         allMajors: [],
+        schools: [],
+        logs: [],
+        
+        // Profile state
         profileItems: [],
         profileSocials: [],
         profileContacts: [],
         profileTournaments: [],
         profileMajorIds: [],
-        logs: [],
-        schoolModalOpen: false,
-        logModalOpen: false,
-        editingId: null,
-        schoolForm: { name: '', division: '', mascot: '', interest: 'High Interest', coaches: [], camps: [], selectedMajorIds: [] },
-        logForm: { school_id: '', type: 'Email Sent', date: new Date().toISOString().split('T')[0], summary: '', details: '' },
+
+        // UI Filters & Modals
+        searchQuery: '',
+        selectedDivision: 'ALL',
+        selectedInterest: 'ALL',
+        selectedMajor: 'ALL',
+        showAddSchoolModal: false,
+        showEditSchoolModal: false,
+        showAddLogModal: false,
+        showEditLogModal: false,
         
-        // Calendar State
-        calendarYear: new Date().getFullYear(),
-        calendarMonth: new Date().getMonth(),
+        // Form models
+        newSchool: { name: '', division: '', mascot: '', interest: 'Warm', notes: '' },
+        editSchool: { id: null, name: '', division: '', mascot: '', interest: 'Warm', notes: '' },
+        newLog: { school_id: '', date: new Date().toISOString().split('T')[0], type: 'Email', notes: '' },
+        editLog: { id: null, school_id: '', date: '', type: 'Email', notes: '' },
+
+        // Calendar state
+        currentYear: new Date().getFullYear(),
+        currentMonth: new Date().getMonth(), // 0-indexed
 
         async init() {
-            if (!supabaseClient) {
-                this.errorMessage = 'Supabase client failed to initialize. Check config.js.';
-                this.loading = false;
-                return;
-            }
-            const { data: athData } = await supabaseClient.from('athletes').select('*').order('id');
-            if (athData && athData.length > 0) {
-                this.athletes = athData;
-                this.selectedAthleteId = athData[0].id;
-                this.currentAthlete = athData[0];
+            await this.fetchAthletes();
+            if (this.athletes.length > 0) {
+                this.selectedAthleteId = this.athletes[0].id;
             }
             await this.fetchData();
         },
 
-        async switchAthlete() {
-            this.currentAthlete = this.athletes.find(a => String(a.id) === String(this.selectedAthleteId)) || this.currentAthlete;
+        async fetchAthletes() {
+            // Adjust table name if your athletes table differs (e.g. 'athletes' or 'profiles')
+            const { data, error } = await supabaseClient.from('athletes').select('*').order('first_name');
+            if (data) {
+                this.athletes = data;
+            } else if (error) {
+                // Fallback if table name is player or user
+                this.athletes = [{ id: 1, first_name: 'Athlete' }];
+                this.selectedAthleteId = 1;
+            }
+        },
+
+        async switchAthlete(id) {
+            this.selectedAthleteId = id;
             await this.fetchData();
         },
 
@@ -93,6 +96,13 @@ function cloudApp() {
             const { data: athMajors } = await supabaseClient.from('athlete_majors').select('major_id').eq('athlete_id', athId);
             if (athMajors) this.profileMajorIds = athMajors.map(am => am.major_id);
 
+            // Fetch coaches separately
+            const { data: coachesData } = await supabaseClient.from('coaches').select('*');
+
+            // Fetch camps separately
+            const { data: campsData } = await supabaseClient.from('camps').select('*');
+
+            // Fetch schools and school_majors
             const { data: schoolsData, error: schoolsError } = await supabaseClient
                 .from('schools')
                 .select(`
@@ -101,8 +111,6 @@ function cloudApp() {
                     division,
                     mascot,
                     interest,
-                    coaches (*),
-                    camps (*),
                     school_majors (
                         major_id,
                         majors ( id, name )
@@ -115,7 +123,14 @@ function cloudApp() {
             } else {
                 this.schools = (schoolsData || []).map(s => {
                     const majorsList = s.school_majors ? s.school_majors.map(sm => sm.majors).filter(Boolean) : [];
-                    return { ...s, majors: majorsList };
+                    const schoolCoaches = (coachesData || []).filter(c => c.school_id === s.id);
+                    const schoolCamps = (campsData || []).filter(c => c.school_id === s.id);
+                    return { 
+                        ...s, 
+                        majors: majorsList, 
+                        coaches: schoolCoaches, 
+                        camps: schoolCamps 
+                    };
                 });
             }
 
@@ -125,189 +140,61 @@ function cloudApp() {
             this.loading = false;
         },
 
-        getMajorName(id) {
-            const m = this.allMajors.find(item => String(item.id) === String(id));
-            return m ? m.name : 'Unknown Major';
+        // Computed / Getters
+        get currentAthlete() {
+            return this.athletes.find(a => a.id === this.selectedAthleteId) || null;
         },
 
-        async updatePlayerMajors() {
-            const athId = this.selectedAthleteId;
-            await supabaseClient.from('athlete_majors').delete().eq('athlete_id', athId);
-            if (this.profileMajorIds.length > 0) {
-                const payload = this.profileMajorIds.map(mId => ({ athlete_id: athId, major_id: mId }));
-                await supabaseClient.from('athlete_majors').insert(payload);
-            }
-            this.showToast('Intended majors updated');
-        },
-
-        async removeMajorSelection(mId) {
-            this.profileMajorIds = this.profileMajorIds.filter(id => String(id) !== String(mId));
-            await this.updatePlayerMajors();
-        },
-
-        async addNewMajor() {
-            if (!this.newMajorName.trim()) return;
-            const { data, error } = await supabaseClient.from('majors').insert([{ name: this.newMajorName.trim() }]).select().single();
-            if (!error && data) {
-                this.allMajors.push(data);
-                this.profileMajorIds.push(data.id);
-                await this.updatePlayerMajors();
-                this.newMajorName = '';
-                this.showToast('Added and assigned new major!');
-            }
-        },
-
-        async updateProfileItem(item) {
-            await supabaseClient.from('player_profile').update({ value: item.value }).eq('id', item.id);
-            this.showToast(`Updated ${item.label}`);
-        },
-
-        async updateSocial(soc) {
-            await supabaseClient.from('player_profile_socials').update({ handle: soc.handle }).eq('id', soc.id);
-            this.showToast(`Updated ${soc.platform}`);
-        },
-
-        async updateContact(c) {
-            await supabaseClient.from('player_profile_contacts').update({ team_or_org_name: c.team_or_org_name, contact_name: c.contact_name, email: c.email, phone: c.phone }).eq('id', c.id);
-            this.showToast(`Updated ${c.role_title}`);
-        },
-
-        async updateTournament(t) {
-            await supabaseClient.from('player_profile_tournaments').update({
-                tournament_name: t.tournament_name,
-                start_date: t.start_date || null,
-                end_date: t.end_date || null,
-                city: t.city,
-                state: t.state
-            }).eq('id', t.id);
-            this.showToast('Tournament updated');
-        },
-
-        async addTournamentRow() {
-            const { data, error } = await supabaseClient.from('player_profile_tournaments').insert([{
-                athlete_id: this.selectedAthleteId,
-                tournament_name: 'New Tournament',
-                city: '',
-                state: '',
-                display_order: this.profileTournaments.length + 1
-            }]).select().single();
-            if (!error && data) {
-                this.profileTournaments.push(data);
-                this.showToast('Tournament added');
-            }
-        },
-
-        async deleteTournament(id) {
-            if (confirm('Delete this tournament?')) {
-                await supabaseClient.from('player_profile_tournaments').delete().eq('id', id);
-                this.profileTournaments = this.profileTournaments.filter(t => t.id !== id);
-                this.showToast('Tournament deleted');
-            }
-        },
-
-        copyToClipboard(text, label) {
-            if (!text) {
-                this.showToast('No value to copy!');
-                return;
-            }
-            navigator.clipboard.writeText(text);
-            this.showToast(`Copied ${label}!`);
-        },
-
-        showToast(msg) {
-            this.toastMessage = msg;
-            setTimeout(() => { this.toastMessage = ''; }, 2500);
+        get headerTitle() {
+            if (!this.currentAthlete) return 'Recruiting Hub';
+            return `${this.currentAthlete.first_name}'s Recruiting Hub`;
         },
 
         get filteredSchools() {
-            return this.schools.filter(s => {
-                const nameMatch = s.name ? s.name.toLowerCase().includes(this.search.toLowerCase()) : false;
-                const coachMatch = s.coaches ? s.coaches.some(c => c.name && c.name.toLowerCase().includes(this.search.toLowerCase())) : false;
-                const matchSearch = nameMatch || coachMatch;
-                const matchDiv = this.divisionFilter === '' || s.division === this.divisionFilter;
-                const matchInterest = this.interestFilter === '' || s.interest === this.interestFilter;
-                const matchMajor = this.majorFilter === '' || (s.majors && s.majors.some(m => String(m.name) === String(this.majorFilter)));
-                return matchSearch && matchDiv && matchInterest && matchMajor;
+            return this.schools.filter(school => {
+                const matchesSearch = school.name.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
+                                      (school.mascot && school.mascot.toLowerCase().includes(this.searchQuery.toLowerCase()));
+                const matchesDiv = this.selectedDivision === 'ALL' || school.division === this.selectedDivision;
+                const matchesInt = this.selectedInterest === 'ALL' || school.interest === this.selectedInterest;
+                const matchesMajor = this.selectedMajor === 'ALL' || (school.majors && school.majors.some(m => m.id == this.selectedMajor));
+                return matchesSearch && matchesDiv && matchesInt && matchesMajor;
             });
         },
 
-        get sortedLogs() { return this.logs; },
-
-        getSchoolName(id) {
-            const sch = this.schools.find(s => s.id === id);
-            return sch ? sch.name : 'Unknown School';
-        },
-
-        // Calendar Methods & Computed Properties
-        get calendarMonthName() {
-            const date = new Date(this.calendarYear, this.calendarMonth, 1);
-            return date.toLocaleString('default', { month: 'long', year: 'numeric' });
-        },
-
-        changeMonth(direction) {
-            this.calendarMonth += direction;
-            if (this.calendarMonth > 11) {
-                this.calendarMonth = 0;
-                this.calendarYear++;
-            } else if (this.calendarMonth < 0) {
-                this.calendarMonth = 11;
-                this.calendarYear--;
-            }
-        },
-
-        resetToCurrentMonth() {
-            const now = new Date();
-            this.calendarYear = now.getFullYear();
-            this.calendarMonth = now.getMonth();
+        get monthName() {
+            const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+            return months[this.currentMonth];
         },
 
         get calendarDays() {
-            const year = this.calendarYear;
-            const month = this.calendarMonth;
+            const year = this.currentYear;
+            const month = this.currentMonth;
             
             const firstDayIndex = new Date(year, month, 1).getDay();
             const totalDays = new Date(year, month + 1, 0).getDate();
-            const prevTotalDays = new Date(year, month, 0).getDate();
-
-            const todayStr = new Date().toISOString().split('T')[0];
+            
             let days = [];
-
-            for (let i = firstDayIndex - 1; i >= 0; i--) {
-                let dNum = prevTotalDays - i;
-                let prevMonth = month === 0 ? 11 : month - 1;
-                let prevYear = month === 0 ? year - 1 : year;
-                let dateStr = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-${String(dNum).padStart(2, '0')}`;
-                days.push({ dayNumber: dNum, dateStr, isCurrentMonth: false, isToday: false, tournaments: [], camps: [] });
+            
+            // Padding for previous month
+            for (let i = 0; i < firstDayIndex; i++) {
+                days.push({ dayNum: '', dateStr: '', camps: [], inactive: true });
             }
-
-            for (let i = 1; i <= totalDays; i++) {
-                let dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-                days.push({ dayNumber: i, dateStr, isCurrentMonth: true, isToday: dateStr === todayStr, tournaments: [], camps: [] });
-            }
-
-            let remainingCells = 7 - (days.length % 7);
-            if (remainingCells < 7) {
-                for (let i = 1; i <= remainingCells; i++) {
-                    let nextMonth = month === 11 ? 0 : month + 1;
-                    let nextYear = month === 11 ? year + 1 : year;
-                    let dateStr = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-                    days.push({ dayNumber: i, dateStr, isCurrentMonth: false, isToday: false, tournaments: [], camps: [] });
-                }
-            }
-
-            this.profileTournaments.forEach(t => {
-                if (!t.start_date) return;
-                let start = new Date(t.start_date + 'T00:00:00');
-                let end = t.end_date ? new Date(t.end_date + 'T00:00:00') : start;
+            
+            // Actual days of the month
+            for (let d = 1; d <= totalDays; d++) {
+                const formattedMonth = String(month + 1).padStart(2, '0');
+                const formattedDay = String(d).padStart(2, '0');
+                const dateStr = `${year}-${formattedMonth}-${formattedDay}`;
                 
-                days.forEach(day => {
-                    let dDate = new Date(day.dateStr + 'T00:00:00');
-                    if (dDate >= start && dDate <= end) {
-                        day.tournaments.push(t);
-                    }
+                days.push({
+                    dayNum: d,
+                    dateStr: dateStr,
+                    camps: [],
+                    inactive: false
                 });
-            });
-
+            }
+            
+            // Populate camps into correct days with date string normalization
             this.schools.forEach(s => {
                 if (s.camps && s.camps.length > 0) {
                     s.camps.forEach(c => {
@@ -321,128 +208,26 @@ function cloudApp() {
                     });
                 }
             });
-
+            
             return days;
         },
 
-        openSchoolModal() {
-            this.editingId = null;
-            this.schoolForm = { name: '', division: '', mascot: '', interest: 'High Interest', coaches: [], camps: [], selectedMajorIds: [] };
-            this.schoolModalOpen = true;
-        },
-
-        editSchool(school) {
-            this.editingId = school.id;
-            this.schoolForm = {
-                name: school.name,
-                division: school.division,
-                mascot: school.mascot,
-                interest: school.interest || 'High Interest',
-                coaches: school.coaches ? JSON.parse(JSON.stringify(school.coaches)) : [],
-                camps: school.camps ? JSON.parse(JSON.stringify(school.camps)) : [],
-                selectedMajorIds: school.majors ? school.majors.map(m => m.id) : []
-            };
-            this.schoolModalOpen = true;
-        },
-
-        addCoachRow() {
-            this.schoolForm.coaches.push({ name: '', role: 'Coach', email: '' });
-        },
-
-        removeCoachRow(idx) {
-            this.schoolForm.coaches.splice(idx, 1);
-        },
-
-        addCampRow() {
-            this.schoolForm.camps.push({ name: 'Prospect Camp', camp_date: '' });
-        },
-
-        removeCampRow(idx) {
-            this.schoolForm.camps.splice(idx, 1);
-        },
-
-        async saveSchool() {
-            this.loading = true;
-            let schoolId = this.editingId;
-
-            if (schoolId) {
-                await supabaseClient.from('schools').update({
-                    name: this.schoolForm.name,
-                    division: this.schoolForm.division,
-                    mascot: this.schoolForm.mascot,
-                    interest: this.schoolForm.interest
-                }).eq('id', schoolId);
+        prevMonth() {
+            if (this.currentMonth === 0) {
+                this.currentMonth = 11;
+                this.currentYear--;
             } else {
-                const { data } = await supabaseClient.from('schools').insert([{
-                    name: this.schoolForm.name,
-                    division: this.schoolForm.division,
-                    mascot: this.schoolForm.mascot,
-                    interest: this.schoolForm.interest
-                }]).select().single();
-                if (data) schoolId = data.id;
-            }
-
-            if (schoolId) {
-                await supabaseClient.from('coaches').delete().eq('school_id', schoolId);
-                if (this.schoolForm.coaches.length > 0) {
-                    const coachPayload = this.schoolForm.coaches.map(c => ({ school_id: schoolId, name: c.name, role: c.role, email: c.email }));
-                    await supabaseClient.from('coaches').insert(coachPayload);
-                }
-
-                await supabaseClient.from('camps').delete().eq('school_id', schoolId);
-                if (this.schoolForm.camps.length > 0) {
-                    const campPayload = this.schoolForm.camps.map(c => ({ school_id: schoolId, name: c.name, camp_date: c.camp_date }));
-                    await supabaseClient.from('camps').insert(campPayload);
-                }
-
-                await supabaseClient.from('school_majors').delete().eq('school_id', schoolId);
-                if (this.schoolForm.selectedMajorIds.length > 0) {
-                    const majorPayload = this.schoolForm.selectedMajorIds.map(mId => ({ school_id: schoolId, major_id: mId }));
-                    await supabaseClient.from('school_majors').insert(majorPayload);
-                }
-            }
-
-            this.schoolModalOpen = false;
-            await this.fetchData();
-        },
-
-        async deleteSchool(id) {
-            if (confirm('Delete this program and all associated details?')) {
-                await supabaseClient.from('schools').delete().eq('id', id);
-                await this.fetchData();
+                this.currentMonth--;
             }
         },
 
-        openLogModal() {
-            this.logForm = { school_id: '', type: 'Email Sent', date: new Date().toISOString().split('T')[0], summary: '', details: '' };
-            this.logModalOpen = true;
-        },
-
-        async saveLog() {
-            await supabaseClient.from('communication_logs').insert([this.logForm]);
-            this.logModalOpen = false;
-            await this.fetchData();
-        },
-
-        async deleteLog(id) {
-            await supabaseClient.from('communication_logs').delete().eq('id', id);
-            await this.fetchData();
-        },
-
-        exportCSV() {
-            let csv = 'College,Division,Mascot,Interest,Majors,Coaches,Camps\n';
-            this.schools.forEach(s => {
-                const majorNames = s.majors ? s.majors.map(m => m.name).join('; ') : '';
-                const coachNames = s.coaches ? s.coaches.map(c => `${c.name} (${c.role || 'Coach'})`).join('; ') : '';
-                const campDates = s.camps ? s.camps.map(c => `${c.name || 'Camp'}: ${c.camp_date}`).join('; ') : '';
-                csv += `"${s.name}","${s.division || ''}","${s.mascot || ''}","${s.interest || ''}","${majorNames}","${coachNames}","${campDates}"\n`;
-            });
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.setAttribute('href', url);
-            a.setAttribute('download', 'frankie_recruiting_contacts.csv');
-            a.click();
+        nextMonth() {
+            if (this.currentMonth === 11) {
+                this.currentMonth = 0;
+                this.currentYear++;
+            } else {
+                this.currentMonth++;
+            }
         }
-    }
+    };
 }

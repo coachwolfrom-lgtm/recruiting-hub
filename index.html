@@ -3,569 +3,185 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Frankie's Softball Recruiting Hub</title>
-    <!-- Tailwind CSS -->
+    <title>Recruiting Hub</title>
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Alpine.js -->
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.10/dist/cdn.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <!-- Supabase JS Client -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.42.0/dist/umd/supabase.min.js"></script>
-    <!-- External Files -->
-    <script src="config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- App Logic -->
     <script src="app.js"></script>
-    <!-- FontAwesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>[x-cloak] { display: none !important; }</style>
 </head>
-<body class="bg-slate-50 text-slate-800 font-sans" x-data="cloudApp()" x-init="init()">
+<body class="bg-slate-100 min-h-screen font-sans" x-data="cloudApp()" x-init="init()">
 
-    <!-- Header -->
-    <header class="bg-indigo-900 text-white shadow-md sticky top-0 z-40">
-        <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-3">
-            <div>
-                <h1 class="text-xl font-bold flex items-center gap-2">
-                    <i class="fa-solid fa-baseball-bat-ball text-amber-400"></i> 
-                    <span x-text="currentAthlete ? currentAthlete.first_name + '''s Recruiting Hub' : 'Recruiting Hub'"></span>
-                </h1>
-                <p class="text-indigo-200 text-xs">Cloud-Synced Relational Architecture</p>
-            </div>
-            <div class="flex gap-2 w-full sm:w-auto justify-end">
-                <button @click="openSchoolModal()" class="bg-amber-500 hover:bg-amber-600 text-indigo-950 font-semibold px-3 py-1.5 rounded-lg text-sm shadow transition flex items-center gap-1.5">
-                    <i class="fa-solid fa-plus"></i> Add School
+    <!-- Header Navigation -->
+    <header class="bg-indigo-900 text-white shadow-md p-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <h1 class="text-2xl font-bold flex items-center gap-2">
+            🥎 <span x-text="headerTitle"></span>
+        </h1>
+
+        <!-- Athlete Switcher (if multiple athletes exist) -->
+        <div class="flex items-center gap-3">
+            <template x-if="athletes.length > 1">
+                <div class="flex items-center gap-2">
+                    <label class="text-sm font-medium text-indigo-200">Athlete:</label>
+                    <select class="bg-indigo-800 text-white border border-indigo-700 rounded px-2 py-1 text-sm focus:outline-none"
+                            @change="switchAthlete($event.target.value)">
+                        <template x-for="athlete in athletes" :key="athlete.id">
+                            <option :value="athlete.id" :selected="athlete.id === selectedAthleteId" x-text="athlete.first_name + ' ' + athlete.last_name"></option>
+                        </template>
+                    </select>
+                </div>
+            </template>
+
+            <!-- Navigation Tabs -->
+            <nav class="flex gap-2 bg-indigo-950 p-1 rounded-lg">
+                <button @click="activeTab = 'colleges'" 
+                        :class="activeTab === 'colleges' ? 'bg-indigo-600 text-white' : 'text-indigo-300 hover:text-white'"
+                        class="px-3 py-1.5 rounded text-sm font-medium transition">
+                    College Programs
                 </button>
-                <button @click="openLogModal()" class="bg-indigo-700 hover:bg-indigo-600 text-white font-semibold px-3 py-1.5 rounded-lg text-sm shadow transition flex items-center gap-1.5">
-                    <i class="fa-solid fa-comments"></i> Log Note
+                <button @click="activeTab = 'calendar'" 
+                        :class="activeTab === 'calendar' ? 'bg-indigo-600 text-white' : 'text-indigo-300 hover:text-white'"
+                        class="px-3 py-1.5 rounded text-sm font-medium transition">
+                    Master Calendar
                 </button>
-            </div>
+            </nav>
         </div>
     </header>
 
-    <!-- Main Dashboard -->
-    <main class="max-w-7xl mx-auto px-4 py-6">
-        
-        <!-- Copy Toast Notification -->
-        <div x-show="toastMessage" x-transition class="fixed bottom-5 right-5 bg-slate-900 text-white px-4 py-2 rounded-lg text-xs font-semibold shadow-lg z-50 flex items-center gap-2" x-cloak>
-            <i class="fa-solid fa-check text-emerald-400"></i>
-            <span x-text="toastMessage"></span>
-        </div>
+    <!-- Main Container -->
+    <main class="max-w-7xl mx-auto p-4 sm:p-6">
 
         <!-- Error Banner -->
-        <div x-show="errorMessage" class="mb-6 p-4 bg-rose-100 border border-rose-300 text-rose-800 rounded-xl text-sm font-semibold flex items-center justify-between" x-cloak>
-            <div class="flex items-center gap-2">
-                <i class="fa-solid fa-triangle-exclamation text-rose-600 text-lg"></i>
-                <span x-text="errorMessage"></span>
+        <template x-if="errorMessage">
+            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+                <strong class="font-bold">Error: </strong>
+                <span class="block sm:inline" x-text="errorMessage"></span>
             </div>
-            <button @click="errorMessage = ''" class="text-rose-600 hover:text-rose-900">&times;</button>
-        </div>
+        </template>
 
         <!-- Loading Spinner -->
-        <div x-show="loading" class="text-center py-20">
-            <i class="fa-solid fa-spinner fa-spin text-3xl text-indigo-600 mb-2"></i>
-            <p class="text-sm text-slate-500">Syncing database...</p>
-        </div>
-
-        <div x-show="!loading" x-cloak>
-            <!-- Tabs -->
-            <div class="flex border-b border-slate-200 mb-6 gap-6 overflow-x-auto">
-                <button @click="activeTab = 'schools'" :class="activeTab === 'schools' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'" class="pb-2 border-b-2 font-semibold text-sm transition whitespace-nowrap">
-                    College Programs (<span x-text="schools.length"></span>)
-                </button>
-                <button @click="activeTab = 'calendar'" :class="activeTab === 'calendar' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'" class="pb-2 border-b-2 font-semibold text-sm transition whitespace-nowrap">
-                    <i class="fa-regular fa-calendar-days text-xs mr-1"></i> Master Calendar
-                </button>
-                <button @click="activeTab = 'profile'" :class="activeTab === 'profile' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'" class="pb-2 border-b-2 font-semibold text-sm transition whitespace-nowrap">
-                    <i class="fa-solid fa-id-card text-xs mr-1"></i> Athlete Profile & Questionnaires
-                </button>
-                <button @click="activeTab = 'timeline'" :class="activeTab === 'timeline' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'" class="pb-2 border-b-2 font-semibold text-sm transition whitespace-nowrap">
-                    Communication Log (<span x-text="logs.length"></span>)
-                </button>
+        <template x-if="loading">
+            <div class="flex justify-center items-center py-20">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
             </div>
+        </template>
 
-            <!-- TAB 1: Schools -->
-            <div x-show="activeTab === 'schools'">
-                <div class="flex flex-col sm:flex-row justify-between gap-3 mb-6">
-                    <input type="text" x-model="search" placeholder="Search college, mascot, coach..." class="w-full sm:w-64 px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
-                    <div class="flex flex-wrap gap-2">
-                        <select x-model="divisionFilter" class="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
-                            <option value="">All Divisions</option>
-                            <template x-for="div in divisions" :key="div.id">
-                                <option :value="div.name" x-text="div.name"></option>
-                            </template>
-                        </select>
-                        <select x-model="majorFilter" class="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
-                            <option value="">All Majors</option>
-                            <template x-for="m in allMajors" :key="m.id">
-                                <option :value="m.name" x-text="m.name"></option>
-                            </template>
-                        </select>
-                        <select x-model="interestFilter" class="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
-                            <option value="">All Interest Levels</option>
-                            <template x-for="item in interestLevels" :key="item.id">
-                                <option :value="item.name" x-text="item.name"></option>
-                            </template>
-                        </select>
-                        <button @click="exportCSV()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 rounded-lg text-xs font-semibold text-slate-700">Export CSV</button>
-                    </div>
+        <!-- TAB 1: COLLEGE PROGRAMS -->
+        <div x-show="!loading && activeTab === 'colleges'" class="space-y-6">
+            
+            <!-- Filters & Search Bar -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-4 justify-between items-center">
+                <div class="w-full md:w-1/3">
+                    <input type="text" x-model="searchQuery" placeholder="Search schools or mascots..." 
+                           class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <template x-for="school in filteredSchools" :key="school.id">
-                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col justify-between">
-                            <div>
-                                <div class="flex justify-between items-start">
-                                    <div>
-                                        <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 uppercase" x-text="school.division || 'N/A'"></span>
-                                        <h3 class="text-base font-bold text-slate-900 mt-1" x-text="school.name"></h3>
-                                        <p class="text-xs text-slate-500" x-text="school.mascot ? 'Mascot: ' + school.mascot : ''"></p>
-                                    </div>
-                                    <span class="text-xs font-semibold px-2 py-0.5 rounded bg-amber-50 text-amber-700" x-text="school.interest || 'Tracking'"></span>
-                                </div>
+                <div class="flex flex-wrap gap-3 w-full md:w-auto">
+                    <!-- Division Filter -->
+                    <select x-model="selectedDivision" class="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none">
+                        <option value="ALL">All Divisions</option>
+                        <template x-for="div in divisions" :key="div.id || div.name">
+                            <option :value="div.name" x-text="div.name"></option>
+                        </template>
+                    </select>
 
-                                <div class="mt-3 pt-2 border-t border-slate-100 text-xs">
-                                    <p class="font-bold text-emerald-800 mb-1"><i class="fa-solid fa-graduation-cap"></i> Offered Majors:</p>
-                                    <template x-if="!school.majors || school.majors.length === 0">
-                                        <p class="text-slate-400 italic">No majors assigned</p>
-                                    </template>
-                                    <div class="flex flex-wrap gap-1">
-                                        <template x-for="m in school.majors" :key="m.id">
-                                            <span class="bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-semibold" x-text="m.name"></span>
-                                        </template>
-                                    </div>
-                                </div>
+                    <!-- Interest Level Filter -->
+                    <select x-model="selectedInterest" class="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none">
+                        <option value="ALL">All Interest Levels</option>
+                        <template x-for="intLevel in interestLevels" :key="intLevel.id || intLevel.name">
+                            <option :value="intLevel.name" x-text="intLevel.name"></option>
+                        </template>
+                    </select>
+                </div>
+            </div>
 
-                                <div class="mt-3 pt-2 border-t border-slate-100 text-xs">
-                                    <p class="font-bold text-slate-700 mb-1">Coaching Staff:</p>
-                                    <template x-if="!school.coaches || school.coaches.length === 0">
-                                        <p class="text-slate-400 italic">No coaches added</p>
-                                    </template>
-                                    <div class="space-y-1">
-                                        <template x-for="c in school.coaches" :key="c.id">
-                                            <div class="flex justify-between items-center text-slate-600 bg-slate-50 p-1.5 rounded">
-                                                <div>
-                                                    <span class="font-semibold text-slate-800" x-text="c.name"></span>
-                                                    <span class="text-[10px] text-slate-500" x-text="'(' + (c.role || 'Coach') + ')'"></span>
-                                                </div>
-                                                <a x-show="c.email" :href="'mailto:' + c.email" class="text-indigo-600 hover:underline"><i class="fa-regular fa-envelope"></i></a>
+            <!-- School Cards Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <template x-for="school in filteredSchools" :key="school.id">
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col justify-between hover:shadow-md transition">
+                        <div>
+                            <div class="flex justify-between items-start gap-2 mb-2">
+                                <h3 class="font-bold text-lg text-slate-800" x-text="school.name"></h3>
+                                <span class="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200" x-text="school.division"></span>
+                            </div>
+                            <p class="text-sm text-slate-500 mb-4" x-text="school.mascot ? 'Mascot: ' + school.mascot : ''"></p>
+                            
+                            <!-- Interest & Status -->
+                            <div class="mb-4">
+                                <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Interest:</span>
+                                <span class="ml-1 text-sm font-medium text-slate-700" x-text="school.interest || 'Not Set'"></span>
+                            </div>
+
+                            <!-- Associated Camps Section -->
+                            <template x-if="school.camps && school.camps.length > 0">
+                                <div class="mt-4 pt-3 border-t border-slate-100">
+                                    <h4 class="text-xs font-bold uppercase tracking-wider text-indigo-600 mb-2">Upcoming Camps</h4>
+                                    <div class="space-y-1.5">
+                                        <template x-for="camp in school.camps" :key="camp.id">
+                                            <div class="bg-indigo-50/60 p-2 rounded text-xs flex justify-between items-center border border-indigo-100">
+                                                <span class="font-medium text-slate-700" x-text="camp.name || 'Camp'"></span>
+                                                <span class="text-indigo-600 font-semibold" x-text="camp.camp_date ? camp.camp_date.split('T')[0] : ''"></span>
                                             </div>
                                         </template>
                                     </div>
                                 </div>
-
-                                <div class="mt-3 pt-2 border-t border-slate-100 text-xs">
-                                    <p class="font-bold text-rose-700 mb-1"><i class="fa-regular fa-calendar-days"></i> Upcoming Camps:</p>
-                                    <template x-if="!school.camps || school.camps.length === 0">
-                                        <p class="text-slate-400 italic">No camps scheduled</p>
-                                    </template>
-                                    <div class="flex flex-wrap gap-1">
-                                        <template x-for="camp in school.camps" :key="camp.id">
-                                            <span class="bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded text-[11px] font-semibold" x-text="(camp.name ? camp.name + ': ' : '') + camp.camp_date"></span>
-                                        </template>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="mt-4 pt-2 border-t border-slate-100 flex justify-between items-center text-xs">
-                                <button @click="editSchool(school)" class="text-slate-600 hover:text-indigo-600 font-medium flex items-center gap-1"><i class="fa-solid fa-pen"></i> Manage Program</button>
-                                <button @click="deleteSchool(school.id)" class="text-rose-500 hover:text-rose-700"><i class="fa-solid fa-trash"></i></button>
-                            </div>
-                        </div>
-                    </template>
-                </div>
-            </div>
-
-            <!-- TAB 2: Master Calendar View -->
-            <div x-show="activeTab === 'calendar'" class="space-y-4">
-                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-4">
-                    <div class="flex flex-col sm:flex-row justify-between items-center gap-3 border-b pb-4">
-                        <div>
-                            <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
-                                <i class="fa-solid fa-calendar-days text-indigo-600"></i> Master Schedule Calendar
-                            </h2>
-                            <p class="text-xs text-slate-500">Combined monthly view of all scheduled tournaments and college prospect camps.</p>
-                        </div>
-                        <div class="flex items-center gap-3">
-                            <span class="text-sm font-bold text-indigo-950 w-36 text-center" x-text="calendarMonthName"></span>
-                            <div class="flex gap-1">
-                                <button @click="changeMonth(-1)" class="p-2 border rounded-lg hover:bg-slate-100 text-xs font-semibold"><i class="fa-solid fa-chevron-left"></i></button>
-                                <button @click="resetToCurrentMonth()" class="px-3 py-1.5 border rounded-lg hover:bg-slate-100 text-xs font-semibold">Today</button>
-                                <button @click="changeMonth(1)" class="p-2 border rounded-lg hover:bg-slate-100 text-xs font-semibold"><i class="fa-solid fa-chevron-right"></i></button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="flex items-center gap-4 text-xs font-semibold text-slate-600 pt-1">
-                        <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-blue-500 inline-block"></span> Tournaments</div>
-                        <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-rose-500 inline-block"></span> College Camps</div>
-                    </div>
-
-                    <div class="grid grid-cols-7 gap-1 text-center font-bold text-xs text-slate-500 uppercase bg-slate-100 p-2 rounded-lg">
-                        <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
-                    </div>
-
-                    <div class="grid grid-cols-7 gap-1 auto-rows-fr">
-                        <template x-for="day in calendarDays" :key="day.dateStr">
-                            <div :class="{'bg-slate-50 opacity-40': !day.isCurrentMonth, 'bg-white border-slate-200': day.isCurrentMonth, 'border-indigo-500 ring-1 ring-indigo-500': day.isToday}" class="min-h-[100px] border rounded-lg p-1.5 flex flex-col justify-between overflow-hidden">
-                                <div class="flex justify-between items-center text-xs">
-                                    <span :class="{'font-bold text-indigo-600 bg-indigo-50 px-1.5 rounded-full': day.isToday, 'text-slate-700': !day.isToday}" x-text="day.dayNumber"></span>
-                                </div>
-                                <div class="space-y-1 overflow-y-auto max-h-[80px] mt-1">
-                                    <template x-for="t in day.tournaments" :key="t.id">
-                                        <div class="bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-semibold px-1.5 py-0.5 rounded truncate" :title="t.tournament_name + ' (' + t.city + ', ' + t.state + ')'">
-                                            <i class="fa-solid fa-trophy text-[9px] mr-0.5"></i> <span x-text="t.tournament_name"></span>
-                                        </div>
-                                    </template>
-                                    <template x-for="c in day.camps" :key="c.id">
-                                        <div class="bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-semibold px-1.5 py-0.5 rounded truncate" :title="c.schoolName + ': ' + c.name">
-                                            <i class="fa-solid fa-graduation-cap text-[9px] mr-0.5"></i> <span x-text="c.schoolName + ' Camp'"></span>
-                                        </div>
-                                    </template>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-            </div>
-
-            <!-- TAB 3: Athlete Profile & Questionnaires -->
-            <div x-show="activeTab === 'profile'" class="space-y-6">
-                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-6">
-                    <div class="flex justify-between items-center border-b pb-4">
-                        <div>
-                            <h2 class="text-lg font-bold text-slate-900"><i class="fa-solid fa-clipboard-list text-indigo-600 mr-2"></i> Athlete Profile & Questionnaires</h2>
-                            <p class="text-xs text-slate-500">Manage relational profile metrics, contacts, social handles, and copy details instantly for forms.</p>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <label class="text-xs font-bold text-slate-700">Active Athlete:</label>
-                            <select x-model="selectedAthleteId" @change="switchAthlete()" class="text-xs font-semibold p-2 border rounded bg-slate-50">
-                                <template x-for="ath in athletes" :key="ath.id">
-                                    <option :value="ath.id" x-text="ath.first_name + ' ' + ath.last_name + ' (' + ath.grad_year + ')'"></option>
-                                </template>
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- 1. INTENDED MAJORS -->
-                    <div class="bg-indigo-50/60 border border-indigo-100 rounded-xl p-4 space-y-4">
-                        <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
-                            <h3 class="font-bold text-sm text-indigo-950 uppercase tracking-wider flex items-center gap-2">
-                                <i class="fa-solid fa-graduation-cap"></i> Intended Majors (Manage & Copy Individually)
-                            </h3>
-                            <div class="flex gap-1 items-center">
-                                <input type="text" x-model="newMajorName" placeholder="Add new major..." class="p-1.5 border rounded text-xs w-36 bg-white">
-                                <button @click="addNewMajor()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-xs font-semibold shadow">Add Major</button>
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-white p-3 rounded-lg border border-indigo-200">
-                            <template x-for="m in allMajors" :key="m.id">
-                                <label class="flex items-center gap-2 text-xs cursor-pointer text-slate-700">
-                                    <input type="checkbox" :value="m.id" x-model="profileMajorIds" @change="updatePlayerMajors()" class="rounded text-indigo-600">
-                                    <span x-text="m.name"></span>
-                                </label>
-                            </template>
-                        </div>
-
-                        <div class="space-y-2 pt-2">
-                            <h4 class="text-xs font-bold text-indigo-900 uppercase">Assigned Intended Majors (Ready to Copy):</h4>
-                            <template x-if="profileMajorIds.length === 0">
-                                <p class="text-xs text-slate-400 italic">No majors selected yet.</p>
-                            </template>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                                <template x-for="mId in profileMajorIds" :key="mId">
-                                    <div class="bg-white p-2.5 rounded-lg border border-indigo-200 shadow-sm flex items-center justify-between">
-                                        <span class="text-xs font-semibold text-slate-800" x-text="getMajorName(mId)"></span>
-                                        <div class="flex items-center gap-1">
-                                            <button @click="copyToClipboard(getMajorName(mId), 'Major')" class="p-1 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded" title="Copy Major"><i class="fa-regular fa-copy text-xs"></i></button>
-                                            <button @click="removeMajorSelection(mId)" class="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded" title="Remove"><i class="fa-solid fa-xmark text-xs"></i></button>
-                                        </div>
-                                    </div>
-                                </template>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 2. SOCIAL MEDIA HANDLES -->
-                    <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-                        <h3 class="font-bold text-sm text-indigo-950 uppercase tracking-wider">Social Media Handles</h3>
-                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            <template x-for="soc in profileSocials" :key="soc.id">
-                                <div class="bg-white p-3 rounded-lg border border-slate-200 space-y-1">
-                                    <span class="text-[11px] font-bold text-slate-500" x-text="soc.platform"></span>
-                                    <div class="flex items-center gap-1">
-                                        <input type="text" x-model="soc.handle" @change="updateSocial(soc)" placeholder="@handle" class="w-full text-xs font-semibold border-b border-transparent hover:border-slate-300 focus:border-indigo-500 focus:outline-none bg-transparent py-0.5">
-                                        <button @click="copyToClipboard(soc.handle, soc.platform)" class="p-1 text-slate-400 hover:text-indigo-600" title="Copy"><i class="fa-regular fa-copy"></i></button>
-                                    </div>
-                                </div>
                             </template>
                         </div>
                     </div>
-
-                    <!-- 3. COACHES & COUNSELORS -->
-                    <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-                        <h3 class="font-bold text-sm text-indigo-950 uppercase tracking-wider">Coaches & High School Counselor</h3>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                            <template x-for="c in profileContacts" :key="c.id">
-                                <div class="bg-white p-3 rounded-lg border border-slate-200 space-y-2">
-                                    <span class="text-xs font-bold text-indigo-900" x-text="c.role_title"></span>
-                                    <div>
-                                        <label class="text-[10px] text-slate-400 uppercase font-bold">Team / Organization Name</label>
-                                        <input type="text" x-model="c.team_or_org_name" @change="updateContact(c)" class="w-full text-xs font-semibold border-b border-transparent hover:border-slate-300 focus:outline-none bg-transparent">
-                                    </div>
-                                    <div>
-                                        <label class="text-[10px] text-slate-400 uppercase font-bold">Contact Name</label>
-                                        <div class="flex items-center gap-1">
-                                            <input type="text" x-model="c.contact_name" @change="updateContact(c)" class="w-full text-xs font-semibold border-b border-transparent hover:border-slate-300 focus:outline-none bg-transparent">
-                                            <button @click="copyToClipboard(c.contact_name, c.role_title + ' Name')" class="p-1 text-slate-400 hover:text-indigo-600"><i class="fa-regular fa-copy text-[10px]"></i></button>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label class="text-[10px] text-slate-400 uppercase font-bold">Email</label>
-                                        <div class="flex items-center gap-1">
-                                            <input type="text" x-model="c.email" @change="updateContact(c)" class="w-full text-xs font-semibold border-b border-transparent hover:border-slate-300 focus:outline-none bg-transparent">
-                                            <button @click="copyToClipboard(c.email, c.role_title + ' Email')" class="p-1 text-slate-400 hover:text-indigo-600"><i class="fa-regular fa-copy text-[10px]"></i></button>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label class="text-[10px] text-slate-400 uppercase font-bold">Phone</label>
-                                        <div class="flex items-center gap-1">
-                                            <input type="text" x-model="c.phone" @change="updateContact(c)" class="w-full text-xs font-semibold border-b border-transparent hover:border-slate-300 focus:outline-none bg-transparent">
-                                            <button @click="copyToClipboard(c.phone, c.role_title + ' Phone')" class="p-1 text-slate-400 hover:text-indigo-600"><i class="fa-regular fa-copy text-[10px]"></i></button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </template>
-                        </div>
-                    </div>
-
-                    <!-- 4. GENERAL PROFILE FIELDS -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <template x-for="item in profileItems" :key="item.id">
-                            <div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm space-y-1">
-                                <span class="text-[11px] font-bold text-slate-500 uppercase tracking-tight" x-text="item.label"></span>
-                                
-                                <template x-if="item.label.includes('Honors')">
-                                    <div class="space-y-1">
-                                        <textarea x-model="item.value" @change="updateProfileItem(item)" rows="3" class="w-full text-xs font-semibold text-slate-800 border border-slate-200 rounded p-1.5 focus:border-indigo-500 focus:outline-none bg-slate-50"></textarea>
-                                        <div class="flex justify-end">
-                                            <button @click="copyToClipboard(item.value, item.label)" class="text-[11px] text-indigo-600 hover:underline font-semibold flex items-center gap-1"><i class="fa-regular fa-copy"></i> Copy Section</button>
-                                        </div>
-                                    </div>
-                                </template>
-
-                                <template x-if="!item.label.includes('Honors')">
-                                    <div class="flex items-center gap-2">
-                                        <input type="text" x-model="item.value" @change="updateProfileItem(item)" class="w-full text-xs font-semibold text-slate-800 border-b border-transparent hover:border-slate-300 focus:border-indigo-500 focus:outline-none bg-transparent py-0.5">
-                                        <button @click="copyToClipboard(item.value, item.label)" class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded transition" title="Copy"><i class="fa-regular fa-copy"></i></button>
-                                    </div>
-                                </template>
-                            </div>
-                        </template>
-                    </div>
-
-                    <!-- 5. TOURNAMENTS TABLE -->
-                    <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-                        <div class="flex justify-between items-center">
-                            <h3 class="font-bold text-sm text-indigo-950 uppercase tracking-wider">Scheduled Tournaments</h3>
-                            <button @click="addTournamentRow()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded text-xs font-semibold shadow"><i class="fa-solid fa-plus"></i> Add Tournament</button>
-                        </div>
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-xs text-left bg-white rounded-lg border border-slate-200">
-                                <thead class="bg-slate-100 text-slate-700 uppercase text-[10px]">
-                                    <tr>
-                                        <th class="p-2.5">Tournament Name</th>
-                                        <th class="p-2.5">Start Date</th>
-                                        <th class="p-2.5">End Date</th>
-                                        <th class="p-2.5">City</th>
-                                        <th class="p-2.5">State</th>
-                                        <th class="p-2.5 text-right">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-slate-100">
-                                    <template x-for="t in profileTournaments" :key="t.id">
-                                        <tr>
-                                            <td class="p-2"><input type="text" x-model="t.tournament_name" @change="updateTournament(t)" class="w-full p-1 border rounded text-xs"></td>
-                                            <td class="p-2"><input type="date" x-model="t.start_date" @change="updateTournament(t)" class="p-1 border rounded text-xs"></td>
-                                            <td class="p-2"><input type="date" x-model="t.end_date" @change="updateTournament(t)" class="p-1 border rounded text-xs"></td>
-                                            <td class="p-2"><input type="text" x-model="t.city" @change="updateTournament(t)" class="w-full p-1 border rounded text-xs" placeholder="City"></td>
-                                            <td class="p-2"><input type="text" x-model="t.state" @change="updateTournament(t)" class="w-16 p-1 border rounded text-xs" placeholder="WA"></td>
-                                            <td class="p-2 text-right">
-                                                <button @click="deleteTournament(t.id)" class="text-rose-500 hover:text-rose-700 p-1"><i class="fa-solid fa-trash"></i></button>
-                                            </td>
-                                        </tr>
-                                    </template>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- TAB 4: Communication Log -->
-            <div x-show="activeTab === 'timeline'">
-                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3">
-                    <template x-for="log in sortedLogs" :key="log.id">
-                        <div class="p-3 rounded-lg border border-slate-100 bg-slate-50 flex justify-between items-start">
-                            <div>
-                                <div class="flex items-center gap-2 text-xs">
-                                    <span class="font-bold text-indigo-900" x-text="getSchoolName(log.school_id)"></span>
-                                    <span class="text-slate-400" x-text="log.date"></span>
-                                    <span class="bg-slate-200 px-1.5 py-0.2 rounded text-[10px]" x-text="log.type"></span>
-                                </div>
-                                <p class="text-sm font-medium text-slate-800 mt-1" x-text="log.summary"></p>
-                                <p class="text-xs text-slate-500" x-text="log.details"></p>
-                            </div>
-                            <button @click="deleteLog(log.id)" class="text-slate-400 hover:text-rose-500 text-xs"><i class="fa-solid fa-trash"></i></button>
-                        </div>
-                    </template>
-                </div>
+                </template>
             </div>
         </div>
+
+        <!-- TAB 2: MASTER CALENDAR -->
+        <div x-show="!loading && activeTab === 'calendar'" class="space-y-6">
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                
+                <!-- Calendar Header controls -->
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold text-slate-800" x-text="monthName + ' ' + currentYear"></h2>
+                    <div class="flex gap-2">
+                        <button @click="prevMonth()" class="px-3 py-1.5 border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-50 transition">Previous</button>
+                        <button @click="nextMonth()" class="px-3 py-1.5 border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-50 transition">Next</button>
+                    </div>
+                </div>
+
+                <!-- Day Headers -->
+                <div class="grid grid-cols-7 gap-2 text-center font-semibold text-slate-500 text-xs sm:text-sm mb-2">
+                    <div>Sun</div>
+                    <div>Mon</div>
+                    <div>Tue</div>
+                    <div>Wed</div>
+                    <div>Thu</div>
+                    <div>Fri</div>
+                    <div>Sat</div>
+                </div>
+
+                <!-- Days Grid -->
+                <div class="grid grid-cols-7 gap-2">
+                    <template x-for="day in calendarDays">
+                        <div :class="day.inactive ? 'bg-slate-50 text-slate-300 border-dashed' : 'bg-white text-slate-700 border-slate-200'"
+                             class="min-h-[100px] sm:min-h-[120px] p-2 rounded-lg border flex flex-col justify-between overflow-hidden">
+                            <div class="font-bold text-sm" x-text="day.dayNum"></div>
+                            
+                            <!-- Camps on this day -->
+                            <div class="flex flex-col gap-1 overflow-y-auto max-h-[80px]">
+                                <template x-for="camp in day.camps" :key="camp.id">
+                                    <div class="bg-indigo-600 text-white text-[10px] sm:text-xs p-1 rounded leading-tight shadow-sm">
+                                        <span class="font-bold block truncate" x-text="camp.schoolName"></span>
+                                        <span class="truncate opacity-90" x-text="camp.name"></span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+            </div>
+        </div>
+
     </main>
-
-    <!-- School Modal -->
-    <div x-show="schoolModalOpen" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" x-cloak>
-        <div class="bg-white rounded-xl max-w-xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div class="flex justify-between items-center border-b pb-2">
-                <h3 class="text-lg font-bold text-indigo-950" x-text="editingId ? 'Manage Program Details' : 'Add New Program'"></h3>
-                <button @click="schoolModalOpen = false" class="text-slate-400 hover:text-slate-700">&times;</button>
-            </div>
-
-            <form @submit.prevent="saveSchool()" class="space-y-4 text-xs">
-                <div class="space-y-2">
-                    <h4 class="font-bold text-slate-700 text-sm">General Information</h4>
-                    <div>
-                        <label class="font-semibold block mb-1">College Name</label>
-                        <input type="text" x-model="schoolForm.name" required class="w-full p-2 border rounded bg-slate-50">
-                    </div>
-                    <div class="grid grid-cols-3 gap-2">
-                        <div>
-                            <label class="font-semibold block mb-1">Division</label>
-                            <select x-model="schoolForm.division" class="w-full p-2 border rounded bg-white">
-                                <option value="">Select Division...</option>
-                                <template x-for="div in divisions" :key="div.id">
-                                    <option :value="div.name" x-text="div.name"></option>
-                                </template>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="font-semibold block mb-1">Mascot</label>
-                            <input type="text" x-model="schoolForm.mascot" placeholder="Wildcats, Huskies..." class="w-full p-2 border rounded">
-                        </div>
-                        <div>
-                            <label class="font-semibold block mb-1">Interest Level</label>
-                            <select x-model="schoolForm.interest" class="w-full p-2 border rounded bg-white">
-                                <option value="">Select Interest...</option>
-                                <template x-for="item in interestLevels" :key="item.id">
-                                    <option :value="item.name" x-text="item.name"></option>
-                                </template>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="space-y-2 border-t pt-3">
-                    <div class="flex justify-between items-center">
-                        <h4 class="font-bold text-emerald-800 text-sm"><i class="fa-solid fa-graduation-cap"></i> Majors Offered</h4>
-                        <div class="flex gap-1 items-center">
-                            <input type="text" x-model="newMajorName" placeholder="New Major..." class="p-1 border rounded text-[11px] w-28">
-                            <button type="button" @click="addNewMajor()" class="text-emerald-700 font-semibold text-[11px] hover:underline">+ Add</button>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-2 bg-emerald-50/50 p-2.5 rounded border border-emerald-100 max-h-32 overflow-y-auto">
-                        <template x-for="m in allMajors" :key="m.id">
-                            <label class="flex items-center gap-2 cursor-pointer text-slate-700">
-                                <input type="checkbox" :value="m.id" x-model="schoolForm.selectedMajorIds" class="rounded text-emerald-600 focus:ring-emerald-500">
-                                <span x-text="m.name"></span>
-                            </label>
-                        </template>
-                    </div>
-                </div>
-
-                <div class="space-y-2 border-t pt-3">
-                    <div class="flex justify-between items-center">
-                        <h4 class="font-bold text-slate-700 text-sm">Coaches</h4>
-                        <button type="button" @click="addCoachRow()" class="text-indigo-600 font-semibold hover:underline"><i class="fa-solid fa-plus"></i> Add Coach</button>
-                    </div>
-                    <div class="space-y-2">
-                        <template x-for="(c, idx) in schoolForm.coaches" :key="idx">
-                            <div class="grid grid-cols-12 gap-1 items-center bg-slate-50 p-2 rounded border border-slate-200">
-                                <input type="text" x-model="c.name" placeholder="Name" required class="col-span-4 p-1 border rounded">
-                                <input type="text" x-model="c.role" placeholder="Role (e.g. Pitching Coach)" class="col-span-4 p-1 border rounded">
-                                <input type="email" x-model="c.email" placeholder="Email" class="col-span-3 p-1 border rounded">
-                                <button type="button" @click="removeCoachRow(idx)" class="col-span-1 text-rose-500 hover:text-rose-700 text-center"><i class="fa-solid fa-xmark"></i></button>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-
-                <div class="space-y-2 border-t pt-3">
-                    <div class="flex justify-between items-center">
-                        <h4 class="font-bold text-rose-700 text-sm">Camp Dates</h4>
-                        <button type="button" @click="addCampRow()" class="text-rose-600 font-semibold hover:underline"><i class="fa-solid fa-plus"></i> Add Camp</button>
-                    </div>
-                    <div class="space-y-2">
-                        <template x-for="(camp, idx) in schoolForm.camps" :key="idx">
-                            <div class="grid grid-cols-12 gap-1 items-center bg-rose-50 p-2 rounded border border-slate-200">
-                                <input type="text" x-model="camp.name" placeholder="Camp Name (e.g. Fall Prospect)" class="col-span-6 p-1 border rounded">
-                                <input type="date" x-model="camp.camp_date" required class="col-span-5 p-1 border rounded">
-                                <button type="button" @click="removeCampRow(idx)" class="col-span-1 text-rose-500 hover:text-rose-700 text-center"><i class="fa-solid fa-xmark"></i></button>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-
-                <div class="flex justify-end gap-2 border-t pt-3">
-                    <button type="button" @click="schoolModalOpen = false" class="px-4 py-2 text-slate-600 font-medium">Cancel</button>
-                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded font-semibold shadow hover:bg-indigo-700">Save Program</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Log Interaction Modal -->
-    <div x-show="logModalOpen" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" x-cloak>
-        <div class="bg-white rounded-xl max-w-md w-full p-5 space-y-3">
-            <h3 class="text-lg font-bold">Log Coach Interaction</h3>
-            <form @submit.prevent="saveLog()" class="space-y-3 text-xs">
-                <div>
-                    <label class="font-semibold block mb-1">College Program</label>
-                    <select x-model="logForm.school_id" required class="w-full p-2 border rounded bg-white">
-                        <option value="">Select School...</option>
-                        <template x-for="s in schools" :key="s.id">
-                            <option :value="s.id" x-text="s.name"></option>
-                        </template>
-                    </select>
-                </div>
-                <div class="grid grid-cols-2 gap-2">
-                    <div>
-                        <label class="font-semibold block mb-1">Type</label>
-                        <select x-model="logForm.type" class="w-full p-2 border rounded bg-white">
-                            <option value="Email Sent">Email Sent</option>
-                            <option value="Coach Reply">Coach Reply</option>
-                            <option value="Phone Call">Phone Call</option>
-                            <option value="Camp Attended">Camp Attended</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="font-semibold block mb-1">Date</label>
-                        <input type="date" x-model="logForm.date" required class="w-full p-2 border rounded">
-                    </div>
-                </div>
-                <div>
-                    <label class="font-semibold block mb-1">Summary</label>
-                    <input type="text" x-model="logForm.summary" required placeholder="e.g., Sent Fall showcase schedule" class="w-full p-2 border rounded">
-                </div>
-                <div>
-                    <label class="font-semibold block mb-1">Details</label>
-                    <textarea x-model="logForm.details" rows="2" class="w-full p-2 border rounded" placeholder="Coach feedback or notes..."></textarea>
-                </div>
-                <div class="flex justify-end gap-2 pt-2">
-                    <button type="button" @click="logModalOpen = false" class="px-3 py-1 text-slate-600">Cancel</button>
-                    <button type="submit" class="px-3 py-1 bg-indigo-600 text-white rounded font-semibold">Save Log</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
 </body>
 </html>
