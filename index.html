@@ -65,14 +65,17 @@
 
         <div x-show="!loading" x-cloak>
             <!-- Tabs -->
-            <div class="flex border-b border-slate-200 mb-6 gap-6">
-                <button @click="activeTab = 'schools'" :class="activeTab === 'schools' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'" class="pb-2 border-b-2 font-semibold text-sm transition">
+            <div class="flex border-b border-slate-200 mb-6 gap-6 overflow-x-auto">
+                <button @click="activeTab = 'schools'" :class="activeTab === 'schools' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'" class="pb-2 border-b-2 font-semibold text-sm transition whitespace-nowrap">
                     College Programs (<span x-text="schools.length"></span>)
                 </button>
-                <button @click="activeTab = 'profile'" :class="activeTab === 'profile' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'" class="pb-2 border-b-2 font-semibold text-sm transition">
+                <button @click="activeTab = 'calendar'" :class="activeTab === 'calendar' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'" class="pb-2 border-b-2 font-semibold text-sm transition whitespace-nowrap">
+                    <i class="fa-regular fa-calendar-days text-xs mr-1"></i> Master Calendar
+                </button>
+                <button @click="activeTab = 'profile'" :class="activeTab === 'profile' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'" class="pb-2 border-b-2 font-semibold text-sm transition whitespace-nowrap">
                     <i class="fa-solid fa-id-card text-xs mr-1"></i> Athlete Profile & Questionnaires
                 </button>
-                <button @click="activeTab = 'timeline'" :class="activeTab === 'timeline' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'" class="pb-2 border-b-2 font-semibold text-sm transition">
+                <button @click="activeTab = 'timeline'" :class="activeTab === 'timeline' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'" class="pb-2 border-b-2 font-semibold text-sm transition whitespace-nowrap">
                     Communication Log (<span x-text="logs.length"></span>)
                 </button>
             </div>
@@ -169,7 +172,66 @@
                 </div>
             </div>
 
-            <!-- TAB 2: Athlete Profile & Questionnaires -->
+            <!-- TAB 2: Master Calendar View -->
+            <div x-show="activeTab === 'calendar'" class="space-y-4">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-4">
+                    <!-- Calendar Header & Navigation -->
+                    <div class="flex flex-col sm:flex-row justify-between items-center gap-3 border-b pb-4">
+                        <div>
+                            <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                                <i class="fa-solid fa-calendar-days text-indigo-600"></i> Master Schedule Calendar
+                            </h2>
+                            <p class="text-xs text-slate-500">Combined monthly view of all scheduled tournaments and college prospect camps.</p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="text-sm font-bold text-indigo-950 w-36 text-center" x-text="calendarMonthName"></span>
+                            <div class="flex gap-1">
+                                <button @click="changeMonth(-1)" class="p-2 border rounded-lg hover:bg-slate-100 text-xs font-semibold"><i class="fa-solid fa-chevron-left"></i></button>
+                                <button @click="resetToCurrentMonth()" class="px-3 py-1.5 border rounded-lg hover:bg-slate-100 text-xs font-semibold">Today</button>
+                                <button @click="changeMonth(1)" class="p-2 border rounded-lg hover:bg-slate-100 text-xs font-semibold"><i class="fa-solid fa-chevron-right"></i></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Legend -->
+                    <div class="flex items-center gap-4 text-xs font-semibold text-slate-600 pt-1">
+                        <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-blue-500 inline-block"></span> Tournaments</div>
+                        <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-rose-500 inline-block"></span> College Camps</div>
+                    </div>
+
+                    <!-- Month Grid Header -->
+                    <div class="grid grid-cols-7 gap-1 text-center font-bold text-xs text-slate-500 uppercase bg-slate-100 p-2 rounded-lg">
+                        <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+                    </div>
+
+                    <!-- Month Grid Days -->
+                    <div class="grid grid-cols-7 gap-1 auto-rows-fr">
+                        <template x-for="day in calendarDays" :key="day.dateStr">
+                            <div :class="{'bg-slate-50 opacity-40': !day.isCurrentMonth, 'bg-white border-slate-200': day.isCurrentMonth, 'border-indigo-500 ring-1 ring-indigo-500': day.isToday}" class="min-h-[100px] border rounded-lg p-1.5 flex flex-col justify-between overflow-hidden">
+                                <div class="flex justify-between items-center text-xs">
+                                    <span :class="{'font-bold text-indigo-600 bg-indigo-50 px-1.5 rounded-full': day.isToday, 'text-slate-700': !day.isToday}" x-text="day.dayNumber"></span>
+                                </div>
+                                <div class="space-y-1 overflow-y-auto max-h-[80px] mt-1">
+                                    <!-- Tournaments -->
+                                    <template x-for="t in day.tournaments" :key="t.id">
+                                        <div class="bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-semibold px-1.5 py-0.5 rounded truncate" :title="t.tournament_name + ' (' + t.city + ', ' + t.state + ')'">
+                                            <i class="fa-solid fa-trophy text-[9px] mr-0.5"></i> <span x-text="t.tournament_name"></span>
+                                        </div>
+                                    </template>
+                                    <!-- Camps -->
+                                    <template x-for="c in day.camps" :key="c.id">
+                                        <div class="bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-semibold px-1.5 py-0.5 rounded truncate" :title="c.schoolName + ': ' + c.name">
+                                            <i class="fa-solid fa-graduation-cap text-[9px] mr-0.5"></i> <span x-text="c.schoolName + ' Camp'"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: Athlete Profile & Questionnaires -->
             <div x-show="activeTab === 'profile'" class="space-y-6">
                 <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-6">
                     <div class="flex justify-between items-center border-b pb-4">
@@ -347,7 +409,7 @@
                 </div>
             </div>
 
-            <!-- TAB 3: Communication Log -->
+            <!-- TAB 4: Communication Log -->
             <div x-show="activeTab === 'timeline'">
                 <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3">
                     <template x-for="log in sortedLogs" :key="log.id">
@@ -454,7 +516,7 @@
                         <template x-for="(camp, idx) in schoolForm.camps" :key="idx">
                             <div class="grid grid-cols-12 gap-1 items-center bg-rose-50 p-2 rounded border border-slate-200">
                                 <input type="text" x-model="camp.name" placeholder="Camp Name (e.g. Fall Prospect)" class="col-span-6 p-1 border rounded">
-                                <input type="text" x-model="camp.camp_date" placeholder="Date (e.g. 9/26/26)" required class="col-span-5 p-1 border rounded">
+                                <input type="date" x-model="camp.camp_date" required class="col-span-5 p-1 border rounded">
                                 <button type="button" @click="removeCampRow(idx)" class="col-span-1 text-rose-500 hover:text-rose-700 text-center"><i class="fa-solid fa-xmark"></i></button>
                             </div>
                         </template>
@@ -556,6 +618,10 @@
                 editingId: null,
                 schoolForm: { name: '', division: '', mascot: '', interest: 'High Interest', coaches: [], camps: [], selectedMajorIds: [] },
                 logForm: { school_id: '', type: 'Email Sent', date: new Date().toISOString().split('T')[0], summary: '', details: '' },
+                
+                // Calendar State
+                calendarYear: new Date().getFullYear(),
+                calendarMonth: new Date().getMonth(), // 0-11
 
                 async init() {
                     if (!supabaseClient) {
@@ -738,6 +804,98 @@
                 getSchoolName(id) {
                     const sch = this.schools.find(s => s.id === id);
                     return sch ? sch.name : 'Unknown School';
+                },
+
+                // Calendar Methods & Computed Properties
+                get calendarMonthName() {
+                    const date = new Date(this.calendarYear, this.calendarMonth, 1);
+                    return date.toLocaleString('default', { month: 'long', year: 'numeric' });
+                },
+
+                changeMonth(direction) {
+                    this.calendarMonth += direction;
+                    if (this.calendarMonth > 11) {
+                        this.calendarMonth = 0;
+                        this.calendarYear++;
+                    } else if (this.calendarMonth < 0) {
+                        this.calendarMonth = 11;
+                        this.calendarYear--;
+                    }
+                },
+
+                resetToCurrentMonth() {
+                    const now = new Date();
+                    this.calendarYear = now.getFullYear();
+                    this.calendarMonth = now.getMonth();
+                },
+
+                get calendarDays() {
+                    const year = this.calendarYear;
+                    const month = this.calendarMonth;
+                    
+                    const firstDayIndex = new Date(year, month, 1).getDay();
+                    const totalDays = new Date(year, month + 1, 0).getDate();
+                    const prevTotalDays = new Date(year, month, 0).getDate();
+
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    let days = [];
+
+                    // Previous month trailing days
+                    for (let i = firstDayIndex - 1; i >= 0; i--) {
+                        let dNum = prevTotalDays - i;
+                        let prevMonth = month === 0 ? 11 : month - 1;
+                        let prevYear = month === 0 ? year - 1 : year;
+                        let dateStr = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-${String(dNum).padStart(2, '0')}`;
+                        days.push({ dayNumber: dNum, dateStr, isCurrentMonth: false, isToday: false, tournaments: [], camps: [] });
+                    }
+
+                    // Current month days
+                    for (let i = 1; i <= totalDays; i++) {
+                        let dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+                        days.push({ dayNumber: i, dateStr, isCurrentMonth: true, isToday: dateStr === todayStr, tournaments: [], camps: [] });
+                    }
+
+                    // Next month leading days to complete grid (up to 35 or 42 slots)
+                    let remainingCells = 7 - (days.length % 7);
+                    if (remainingCells < 7) {
+                        for (let i = 1; i <= remainingCells; i++) {
+                            let nextMonth = month === 11 ? 0 : month + 1;
+                            let nextYear = month === 11 ? year + 1 : year;
+                            let dateStr = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+                            days.push({ dayNumber: i, dateStr, isCurrentMonth: false, isToday: false, tournaments: [], camps: [] });
+                        }
+                    }
+
+                    // Map tournaments to days (supporting multi-day ranges)
+                    this.profileTournaments.forEach(t => {
+                        if (!t.start_date) return;
+                        let start = new Date(t.start_date + 'T00:00:00');
+                        let end = t.end_date ? new Date(t.end_date + 'T00:00:00') : start;
+                        
+                        days.forEach(day => {
+                            let dDate = new Date(day.dateStr + 'T00:00:00');
+                            if (dDate >= start && dDate <= end) {
+                                day.tournaments.push(t);
+                            }
+                        });
+                    });
+
+                    // Map camps to days
+                    this.schools.forEach(s => {
+                        if (s.camps && s.camps.length > 0) {
+                            s.camps.forEach(c => {
+                                if (!c.camp_date) return;
+                                let campDateStr = c.camp_date; // format YYYY-MM-DD
+                                days.forEach(day => {
+                                    if (day.dateStr === campDateStr) {
+                                        day.camps.push({ ...c, schoolName: s.name });
+                                    }
+                                });
+                            });
+                        }
+                    });
+
+                    return days;
                 },
 
                 openSchoolModal() {
