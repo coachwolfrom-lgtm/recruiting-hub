@@ -652,7 +652,6 @@
                     const { data, error } = await supabaseClient.from('majors').insert([{ name: this.newMajorName.trim() }]).select().single();
                     if (!error && data) {
                         this.allMajors.push(data);
-                        // Automatically assign to current athlete as well
                         this.profileMajorIds.push(data.id);
                         await this.updatePlayerMajors();
                         this.newMajorName = '';
@@ -853,7 +852,7 @@
                         const campDates = s.camps ? s.camps.map(c => `${c.name || 'Camp'}: ${c.camp_date}`).join('; ') : '';
                         csv += `"${s.name}","${s.division || ''}","${s.mascot || ''}","${s.interest || ''}","${majorNames}","${coachNames}","${campDates}"\n`;
                     });
-                    const blob = new Blob([csv], { type: 'text/csv'</i>);
+                    const blob = new Blob([csv], { type: 'text/csv' });
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.setAttribute('href', url);
