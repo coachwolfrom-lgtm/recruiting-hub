@@ -22,8 +22,8 @@
             <span x-text="headerTitle"></span>
         </h1>
 
-        <!-- Athlete Switcher -->
-        <div class="flex items-center gap-3">
+        <!-- Athlete Switcher & Navigation Tabs -->
+        <div class="flex flex-wrap items-center gap-3">
             <template x-if="athletes.length > 1">
                 <div class="flex items-center gap-2">
                     <label class="text-sm font-medium text-indigo-200">Athlete:</label>
@@ -47,6 +47,11 @@
                         :class="activeTab === 'calendar' ? 'bg-indigo-600 text-white' : 'text-indigo-300 hover:text-white'"
                         class="px-3 py-1.5 rounded text-sm font-medium transition">
                     Master Calendar
+                </button>
+                <button @click="activeTab = 'profile'" 
+                        :class="activeTab === 'profile' ? 'bg-indigo-600 text-white' : 'text-indigo-300 hover:text-white'"
+                        class="px-3 py-1.5 rounded text-sm font-medium transition">
+                    Player Profile
                 </button>
             </nav>
         </div>
@@ -180,6 +185,36 @@
                     </template>
                 </div>
 
+            </div>
+        </div>
+
+        <!-- TAB 3: PLAYER PROFILE -->
+        <div x-show="!loading && activeTab === 'profile'" class="space-y-6">
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-6">
+                <h2 class="text-xl font-bold text-slate-800 border-b pb-3">Athlete Recruiting Profile</h2>
+                
+                <!-- Basic Profile Details / Questions -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <template x-for="item in profileItems" :key="item.id">
+                        <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                            <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1" x-text="item.label || item.category"></label>
+                            <div class="text-slate-800 font-medium" x-text="item.value || 'Not provided'"></div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Tournaments Section -->
+                <div class="mt-6">
+                    <h3 class="text-lg font-semibold text-slate-700 mb-3">Target Tournaments</h3>
+                    <div class="space-y-2">
+                        <template x-for="tourn in profileTournaments" :key="tourn.id">
+                            <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 flex justify-between items-center">
+                                <span class="font-medium text-slate-800" x-text="tourn.name"></span>
+                                <span class="text-sm text-slate-500" x-text="tourn.dates || tourn.location"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
             </div>
         </div>
 
