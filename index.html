@@ -187,24 +187,47 @@
                         </div>
                     </div>
 
-                    <!-- 1. INTENDED MAJORS WITH QUICK COPY BUTTON -->
-                    <div class="bg-indigo-50/60 border border-indigo-100 rounded-xl p-4 space-y-3">
+                    <!-- 1. INTENDED MAJORS MANAGEMENT & INDIVIDUAL COPY -->
+                    <div class="bg-indigo-50/60 border border-indigo-100 rounded-xl p-4 space-y-4">
                         <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
                             <h3 class="font-bold text-sm text-indigo-950 uppercase tracking-wider flex items-center gap-2">
-                                <i class="fa-solid fa-graduation-cap"></i> Intended Majors (Relational)
+                                <i class="fa-solid fa-graduation-cap"></i> Intended Majors (Manage & Copy Individually)
                             </h3>
-                            <button @click="copySelectedMajors()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow transition flex items-center gap-1.5 self-start sm:self-auto">
-                                <i class="fa-regular fa-copy"></i> Copy Selected Majors
-                            </button>
+                            <div class="flex gap-1 items-center">
+                                <input type="text" x-model="newMajorName" placeholder="Add new major..." class="p-1.5 border rounded text-xs w-36 bg-white">
+                                <button @click="addNewMajor()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-xs font-semibold shadow">Add Major</button>
+                            </div>
                         </div>
-                        <p class="text-xs text-slate-600">Select intended majors to track and include in questionnaire exports:</p>
-                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+
+                        <p class="text-xs text-slate-600">Select majors to assign to this athlete, then copy each individual major with one click:</p>
+                        
+                        <!-- Checkboxes to assign -->
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-white p-3 rounded-lg border border-indigo-200">
                             <template x-for="m in allMajors" :key="m.id">
-                                <label class="flex items-center gap-2 bg-white p-2 rounded border border-indigo-200 text-xs cursor-pointer shadow-sm">
+                                <label class="flex items-center gap-2 text-xs cursor-pointer text-slate-700">
                                     <input type="checkbox" :value="m.id" x-model="profileMajorIds" @change="updatePlayerMajors()" class="rounded text-indigo-600">
-                                    <span class="font-semibold text-slate-800" x-text="m.name"></span>
+                                    <span x-text="m.name"></span>
                                 </label>
                             </template>
+                        </div>
+
+                        <!-- Selected Majors Individual Cards with Copy -->
+                        <div class="space-y-2 pt-2">
+                            <h4 class="text-xs font-bold text-indigo-900 uppercase">Assigned Intended Majors (Ready to Copy):</h4>
+                            <template x-if="profileMajorIds.length === 0">
+                                <p class="text-xs text-slate-400 italic">No majors selected yet.</p>
+                            </template>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                                <template x-for="mId in profileMajorIds" :key="mId">
+                                    <div class="bg-white p-2.5 rounded-lg border border-indigo-200 shadow-sm flex items-center justify-between">
+                                        <span class="text-xs font-semibold text-slate-800" x-text="getMajorName(mId)"></span>
+                                        <div class="flex items-center gap-1">
+                                            <button @click="copyToClipboard(getMajorName(mId), 'Major')" class="p-1 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded" title="Copy Major"><i class="fa-regular fa-copy text-xs"></i></button>
+                                            <button @click="removeMajorSelection(mId)" class="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded" title="Remove"><i class="fa-solid fa-xmark text-xs"></i></button>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
                         </div>
                     </div>
 
@@ -429,7 +452,7 @@
                     </div>
                     <div class="space-y-2">
                         <template x-for="(camp, idx) in schoolForm.camps" :key="idx">
-                            <div class="grid grid-cols-12 gap-1 items-center bg-rose-50 p-2 rounded border border-rose-200">
+                            <div class="grid grid-cols-12 gap-1 items-center bg-rose-50 p-2 rounded border border-slate-200">
                                 <input type="text" x-model="camp.name" placeholder="Camp Name (e.g. Fall Prospect)" class="col-span-6 p-1 border rounded">
                                 <input type="text" x-model="camp.camp_date" placeholder="Date (e.g. 9/26/26)" required class="col-span-5 p-1 border rounded">
                                 <button type="button" @click="removeCampRow(idx)" class="col-span-1 text-rose-500 hover:text-rose-700 text-center"><i class="fa-solid fa-xmark"></i></button>
@@ -604,6 +627,11 @@
                     this.loading = false;
                 },
 
+                getMajorName(id) {
+                    const m = this.allMajors.find(item => String(item.id) === String(id));
+                    return m ? m.name : 'Unknown Major';
+                },
+
                 async updatePlayerMajors() {
                     const athId = this.selectedAthleteId;
                     await supabaseClient.from('athlete_majors').delete().eq('athlete_id', athId);
@@ -614,17 +642,22 @@
                     this.showToast('Intended majors updated');
                 },
 
-                copySelectedMajors() {
-                    const selectedNames = this.allMajors
-                        .filter(m => this.profileMajorIds.includes(m.id))
-                        .map(m => m.name)
-                        .join(', ');
-                    if (!selectedNames) {
-                        this.showToast('No majors selected!');
-                        return;
+                async removeMajorSelection(mId) {
+                    this.profileMajorIds = this.profileMajorIds.filter(id => String(id) !== String(mId));
+                    await this.updatePlayerMajors();
+                },
+
+                async addNewMajor() {
+                    if (!this.newMajorName.trim()) return;
+                    const { data, error } = await supabaseClient.from('majors').insert([{ name: this.newMajorName.trim() }]).select().single();
+                    if (!error && data) {
+                        this.allMajors.push(data);
+                        // Automatically assign to current athlete as well
+                        this.profileMajorIds.push(data.id);
+                        await this.updatePlayerMajors();
+                        this.newMajorName = '';
+                        this.showToast('Added and assigned new major!');
                     }
-                    navigator.clipboard.writeText(selectedNames);
-                    this.showToast('Copied intended majors!');
                 },
 
                 async updateProfileItem(item) {
@@ -706,15 +739,6 @@
                 getSchoolName(id) {
                     const sch = this.schools.find(s => s.id === id);
                     return sch ? sch.name : 'Unknown School';
-                },
-
-                async addNewMajor() {
-                    if (!this.newMajorName.trim()) return;
-                    const { data, error } = await supabaseClient.from('majors').insert([{ name: this.newMajorName.trim() }]).select().single();
-                    if (!error && data) {
-                        this.allMajors.push(data);
-                        this.newMajorName = '';
-                    }
                 },
 
                 openSchoolModal() {
@@ -829,7 +853,7 @@
                         const campDates = s.camps ? s.camps.map(c => `${c.name || 'Camp'}: ${c.camp_date}`).join('; ') : '';
                         csv += `"${s.name}","${s.division || ''}","${s.mascot || ''}","${s.interest || ''}","${majorNames}","${coachNames}","${campDates}"\n`;
                     });
-                    const blob = new Blob([csv], { type: 'text/csv' });
+                    const blob = new Blob([csv], { type: 'text/csv'</i>);
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.setAttribute('href', url);
