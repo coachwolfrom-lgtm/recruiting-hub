@@ -215,9 +215,11 @@
                                             <i class="fa-solid fa-trophy text-[9px] mr-0.5"></i> <span x-text="t.tournament_name"></span>
                                         </div>
                                     </template>
-                                    <template x-for="c in day.camps" :key="c.id">
-                                        <div class="bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-semibold px-1.5 py-0.5 rounded truncate" :title="c.schoolName + ': ' + c.name">
-                                            <i class="fa-solid fa-graduation-cap text-[9px] mr-0.5"></i> <span x-text="c.schoolName + ' Camp'"></span>
+                                    <template x-for="(c, cIdx) in day.camps" :key="c.id ? 'camp-' + c.id : 'camp-' + cIdx">
+                                        <div class="bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-semibold px-1.5 py-0.5 rounded truncate" 
+                                            :title="(c.schoolName || 'School') + ': ' + (c.name || 'Camp')">
+                                            <i class="fa-solid fa-graduation-cap text-[9px] mr-0.5"></i> 
+                                            <span x-text="(c.schoolName ? c.schoolName + ' ' : '') + 'Camp'"></span>
                                         </div>
                                     </template>
                                 </div>

@@ -105,6 +105,7 @@ function cloudApp() {
                     const majorsList = s.school_majors ? s.school_majors.map(sm => sm.majors).filter(Boolean) : [];
                     return { ...s, majors: majorsList };
                 });
+                console.log('Loaded Schools & Camps Data:', this.schools); // Check DevTools console
             }
 
             const { data: logsData } = await supabaseClient.from('communication_logs').select('*').order('date', { ascending: false });
@@ -112,7 +113,27 @@ function cloudApp() {
 
             this.loading = false;
         },
-
+        normalizeDate(dateVal) {
+            if (!dateVal) return '';
+            const clean = String(dateVal).trim().split('T')[0].split(' ')[0];
+            const parts = clean.split(/[-/]/);
+            if (parts.length === 3) {
+                let y, m, d;
+                if (parts[0].length === 4) { // YYYY-MM-DD or YYYY-M-D
+                    y = parseInt(parts[0], 10);
+                    m = parseInt(parts[1], 10);
+                    d = parseInt(parts[2], 10);
+                } else { // MM/DD/YYYY or M/D/YYYY
+                    m = parseInt(parts[0], 10);
+                    d = parseInt(parts[1], 10);
+                    y = parseInt(parts[2], 10);
+                }
+                if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+                    return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                }
+            }
+            return clean;
+        },
         getMajorName(id) {
             const m = this.allMajors.find(item => String(item.id) === String(id));
             return m ? m.name : 'Unknown Major';
