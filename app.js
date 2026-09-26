@@ -257,22 +257,41 @@ function cloudApp() {
             const totalDays = new Date(year, month + 1, 0).getDate();
             const prevTotalDays = new Date(year, month, 0).getDate();
 
-            const todayStr = new Date().toISOString().split('T')[0];
+            // Calculate current date string in local YYYY-MM-DD format
+            const now = new Date();
+            const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            
             let days = [];
+
+            // Helper to format date strictly as YYYY-MM-DD
+            const formatDateStr = (y, m, d) => `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 
             // Previous month trailing days
             for (let i = firstDayIndex - 1; i >= 0; i--) {
                 let dNum = prevTotalDays - i;
                 let prevMonth = month === 0 ? 11 : month - 1;
                 let prevYear = month === 0 ? year - 1 : year;
-                let dateStr = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-${String(dNum).padStart(2, '0')}`;
-                days.push({ dayNumber: dNum, dateStr, isCurrentMonth: false, isToday: false, tournaments: [], camps: [] });
+                days.push({ 
+                    dayNumber: dNum, 
+                    dateStr: formatDateStr(prevYear, prevMonth, dNum), 
+                    isCurrentMonth: false, 
+                    isToday: false, 
+                    tournaments: [], 
+                    camps: [] 
+                });
             }
 
             // Current month days
             for (let i = 1; i <= totalDays; i++) {
-                let dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-                days.push({ dayNumber: i, dateStr, isCurrentMonth: true, isToday: dateStr === todayStr, tournaments: [], camps: [] });
+                let dateStr = formatDateStr(year, month, i);
+                days.push({ 
+                    dayNumber: i, 
+                    dateStr: dateStr, 
+                    isCurrentMonth: true, 
+                    isToday: dateStr === todayStr, 
+                    tournaments: [], 
+                    camps: [] 
+                });
             }
 
             // Next month leading days to complete grid
@@ -281,39 +300,50 @@ function cloudApp() {
                 for (let i = 1; i <= remainingCells; i++) {
                     let nextMonth = month === 11 ? 0 : month + 1;
                     let nextYear = month === 11 ? year + 1 : year;
-                    let dateStr = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-                    days.push({ dayNumber: i, dateStr, isCurrentMonth: false, isToday: false, tournaments: [], camps: [] });
+                    days.push({ 
+                        dayNumber: i, 
+                        dateStr: formatDateStr(nextYear, nextMonth, i), 
+                        isCurrentMonth: false, 
+                        isToday: false, 
+                        tournaments: [], 
+                        camps: [] 
+                    });
                 }
             }
 
-            // Map tournaments to days
-            this.profileTournaments.forEach(t => {
-                if (!t.start_date) return;
-                let start = new Date(t.start_date + 'T00:00:00');
-                let end = t.end_date ? new Date(t.end_date + 'T00:00:00') : start;
-                
-                days.forEach(day => {
-                    let dDate = new Date(day.dateStr + 'T00:00:00');
-                    if (dDate >= start && dDate <= end) {
-                        day.tournaments.push(t);
+            // Map tournaments to days (string-based range comparison to avoid UTC shifts)
+            if (Array.isArray(this.profileTournaments)) {
+                this.profileTournaments.forEach(t => {
+                    if (!t.start_date) return;
+                    const startStr = String(t.start_date).split('T')[0].trim();
+                    const endStr = t.end_date ? String(t.end_date).split('T')[0].trim() : startStr;
+                    
+                    days.forEach(day => {
+                        if (day.dateStr >= startStr && day.dateStr <= endStr) {
+                            day.tournaments.push(t);
+                        }
+                    });
+                });
+            }
+
+            // Map camps to days (normalizing camp_date format)
+            if (Array.isArray(this.schools)) {
+                this.schools.forEach(s => {
+                    if (Array.isArray(s.camps) && s.camps.length > 0) {
+                        s.camps.forEach(c => {
+                            if (!c.camp_date) return;
+                            // Clean timestamp/time strings down to pure YYYY-MM-DD
+                            const campDateStr = String(c.camp_date).split('T')[0].split(' ')[0].trim();
+                            
+                            days.forEach(day => {
+                                if (day.dateStr === campDateStr) {
+                                    day.camps.push({ ...c, schoolName: s.name });
+                                }
+                            });
+                        });
                     }
                 });
-            });
-
-            // Map camps to days
-            this.schools.forEach(s => {
-                if (s.camps && s.camps.length > 0) {
-                    s.camps.forEach(c => {
-                        if (!c.camp_date) return;
-                        let campDateStr = c.camp_date;
-                        days.forEach(day => {
-                            if (day.dateStr === campDateStr) {
-                                day.camps.push({ ...c, schoolName: s.name });
-                            }
-                        });
-                    });
-                }
-            });
+            }
 
             return days;
         },
