@@ -71,12 +71,19 @@
             <div x-show="activeTab === 'schools'">
                 <div class="flex flex-col sm:flex-row justify-between gap-3 mb-6">
                     <input type="text" x-model="search" placeholder="Search college, mascot, coach..." class="w-full sm:w-72 px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
-                    <div class="flex gap-2">
-                        <!-- Dynamic Division Filter -->
+                    <div class="flex flex-wrap gap-2">
+                        <!-- Division Filter -->
                         <select x-model="divisionFilter" class="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
                             <option value="">All Divisions</option>
                             <template x-for="div in divisions" :key="div.id">
                                 <option :value="div.name" x-text="div.name"></option>
+                            </template>
+                        </select>
+                        <!-- Interest Filter -->
+                        <select x-model="interestFilter" class="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+                            <option value="">All Interest Levels</option>
+                            <template x-for="item in interestLevels" :key="item.id">
+                                <option :value="item.name" x-text="item.name"></option>
                             </template>
                         </select>
                         <button @click="exportCSV()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 rounded-lg text-xs font-semibold text-slate-700">Export CSV</button>
@@ -177,10 +184,9 @@
                         <label class="font-semibold block mb-1">College Name</label>
                         <input type="text" x-model="schoolForm.name" required class="w-full p-2 border rounded bg-slate-50">
                     </div>
-                    <div class="grid grid-cols-2 gap-2">
+                    <div class="grid grid-cols-3 gap-2">
                         <div>
                             <label class="font-semibold block mb-1">Division</label>
-                            <!-- Dynamic Division Dropdown -->
                             <select x-model="schoolForm.division" class="w-full p-2 border rounded bg-white">
                                 <option value="">Select Division...</option>
                                 <template x-for="div in divisions" :key="div.id">
@@ -191,6 +197,16 @@
                         <div>
                             <label class="font-semibold block mb-1">Mascot</label>
                             <input type="text" x-model="schoolForm.mascot" placeholder="Wildcats, Huskies..." class="w-full p-2 border rounded">
+                        </div>
+                        <div>
+                            <label class="font-semibold block mb-1">Interest Level</label>
+                            <!-- Interest Dropdown inside Modal -->
+                            <select x-model="schoolForm.interest" class="w-full p-2 border rounded bg-white">
+                                <option value="">Select Interest...</option>
+                                <template x-for="item in interestLevels" :key="item.id">
+                                    <option :value="item.name" x-text="item.name"></option>
+                                </template>
+                            </select>
                         </div>
                     </div>
                 </div>
@@ -303,8 +319,10 @@
                 activeTab: 'schools',
                 search: '',
                 divisionFilter: '',
+                interestFilter: '',
                 schools: [],
                 divisions: [],
+                interestLevels: [],
                 logs: [],
                 schoolModalOpen: false,
                 logModalOpen: false,
@@ -325,19 +343,23 @@
                     this.loading = true;
                     this.errorMessage = '';
 
-                    // Fetch divisions lookup table
+                    // Fetch divisions
                     const { data: divisionsData, error: divisionsError } = await supabaseClient
                         .from('divisions')
                         .select('*')
                         .order('name');
 
-                    if (divisionsError) {
-                        console.error('Divisions Fetch Error:', divisionsError);
-                    } else {
-                        this.divisions = divisionsData || [];
-                    }
+                    if (!divisionsError) this.divisions = divisionsData || [];
 
-                    // Fetch schools with linked coaches and camps
+                    // Fetch interest levels
+                    const { data: interestData, error: interestError } = await supabaseClient
+                        .from('interest_levels')
+                        .select('*')
+                        .order('name');
+
+                    if (!interestError) this.interestLevels = interestData || [];
+
+                    // Fetch schools with coaches and camps
                     const { data: schoolsData, error: schoolsError } = await supabaseClient
                         .from('schools')
                         .select('*, coaches(*), camps(*)')
@@ -356,11 +378,7 @@
                         this.schools = schoolsData || [];
                     }
 
-                    if (logsError) {
-                        console.error('Logs Fetch Error:', logsError);
-                    } else {
-                        this.logs = logsData || [];
-                    }
+                    if (!logsError) this.logs = logsData || [];
 
                     this.loading = false;
                 },
@@ -371,7 +389,8 @@
                         const coachMatch = s.coaches ? s.coaches.some(c => c.name && c.name.toLowerCase().includes(this.search.toLowerCase())) : false;
                         const matchSearch = nameMatch || coachMatch;
                         const matchDiv = this.divisionFilter === '' || s.division === this.divisionFilter;
-                        return matchSearch && matchDiv;
+                        const matchInterest = this.interestFilter === '' || s.interest === this.interestFilter;
+                        return matchSearch && matchDiv && matchInterest;
                     });
                 },
 
@@ -489,11 +508,11 @@
                 },
 
                 exportCSV() {
-                    let csv = 'College,Division,Mascot,Coaches,Camps\n';
+                    let csv = 'College,Division,Mascot,Interest,Coaches,Camps\n';
                     this.schools.forEach(s => {
                         const coachNames = s.coaches ? s.coaches.map(c => `${c.name} (${c.role || 'Coach'})`).join('; ') : '';
                         const campDates = s.camps ? s.camps.map(c => `${c.name || 'Camp'}: ${c.camp_date}`).join('; ') : '';
-                        csv += `"${s.name}","${s.division || ''}","${s.mascot || ''}","${coachNames}","${campDates}"\n`;
+                        csv += `"${s.name}","${s.division || ''}","${s.mascot || ''}","${s.interest || ''}","${coachNames}","${campDates}"\n`;
                     });
                     const blob = new Blob([csv], { type: 'text/csv' });
                     const url = window.URL.createObjectURL(blob);
