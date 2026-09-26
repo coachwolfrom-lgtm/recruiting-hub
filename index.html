@@ -7,9 +7,9 @@
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Alpine.js -->
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <!-- Supabase JS Client -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.10/dist/cdn.min.js"></script>
+    <!-- Supabase JS Client (Explicit Version 2.42.0 for sb_publishable key support) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.42.0/dist/umd/supabase.min.js"></script>
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -38,6 +38,15 @@
     <!-- Main Dashboard -->
     <main class="max-w-7xl mx-auto px-4 py-6">
         
+        <!-- Error Banner -->
+        <div x-show="errorMessage" class="mb-6 p-4 bg-rose-100 border border-rose-300 text-rose-800 rounded-xl text-sm font-semibold flex items-center justify-between" x-cloak>
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-triangle-exclamation text-rose-600 text-lg"></i>
+                <span x-text="errorMessage"></span>
+            </div>
+            <button @click="errorMessage = ''" class="text-rose-600 hover:text-rose-900">&times;</button>
+        </div>
+
         <!-- Loading Spinner -->
         <div x-show="loading" class="text-center py-20">
             <i class="fa-solid fa-spinner fa-spin text-3xl text-indigo-600 mb-2"></i>
@@ -80,7 +89,7 @@
                             <div>
                                 <div class="flex justify-between items-start">
                                     <div>
-                                        <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 uppercase" x-text="school.division"></span>
+                                        <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 uppercase" x-text="school.division || 'N/A'"></span>
                                         <h3 class="text-base font-bold text-slate-900 mt-1" x-text="school.name"></h3>
                                         <p class="text-xs text-slate-500" x-text="school.mascot ? 'Mascot: ' + school.mascot : ''"></p>
                                     </div>
@@ -90,6 +99,7 @@
                                 <div class="mt-3 pt-3 border-t border-slate-100 text-xs space-y-1">
                                     <div><span class="font-semibold text-slate-600">Head Coach:</span> <span x-text="school.head_coach || '—'"></span></div>
                                     <div><span class="font-semibold text-slate-600">Assistant/Coach:</span> <span x-text="school.coach || '—'"></span></div>
+                                    <div x-show="school.email"><span class="font-semibold text-slate-600">Email:</span> <a :href="'mailto:' + school.email" class="text-indigo-600 hover:underline" x-text="school.email"></a></div>
                                     <div x-show="school.camp"><span class="font-semibold text-rose-600">Camp Date:</span> <span class="font-semibold text-rose-600" x-text="school.camp"></span></div>
                                 </div>
                             </div>
@@ -211,15 +221,22 @@
         </div>
     </div>
 
-    <!-- Script Logic with Supabase -->
+    <!-- Script Logic with Explicit Supabase Error Diagnostics -->
     <script>
-        const SUPABASE_URL = 'https://uzhpfonasfmflwpwgkwb.supabase.co/rest/v1/';
-        const SUPABASE_ANON_KEY = 'sb_publishable_8JtsW-S3ttoSoyQRKUV-BA_EcI3hbai';
-        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const SUPABASE_URL = 'YOUR_SUPABASE_URL_HERE';
+        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY_HERE';
+
+        let supabaseClient;
+        try {
+            supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        } catch (e) {
+            console.error('Initialization error:', e);
+        }
 
         function cloudApp() {
             return {
                 loading: true,
+                errorMessage: '',
                 activeTab: 'schools',
                 search: '',
                 divisionFilter: '',
@@ -232,21 +249,42 @@
                 logForm: { school_id: '', type: 'Email Sent', date: new Date().toISOString().split('T')[0], summary: '', details: '' },
 
                 async init() {
+                    if (!supabaseClient) {
+                        this.errorMessage = 'Supabase client failed to initialize. Check your URL and Key format.';
+                        this.loading = false;
+                        return;
+                    }
                     await this.fetchData();
                 },
 
                 async fetchData() {
                     this.loading = true;
-                    let { data: schools } = await supabaseClient.from('schools').select('*').order('name');
-                    let { data: logs } = await supabaseClient.from('communication_logs').select('*').order('date', { ascending: false });
-                    this.schools = schools || [];
-                    this.logs = logs || [];
+                    this.errorMessage = '';
+
+                    const { data: schoolsData, error: schoolsError } = await supabaseClient.from('schools').select('*').order('name');
+                    const { data: logsData, error: logsError } = await supabaseClient.from('communication_logs').select('*').order('date', { ascending: false });
+
+                    if (schoolsError) {
+                        console.error('Schools Fetch Error:', schoolsError);
+                        this.errorMessage = 'Database Error: ' + schoolsError.message;
+                    } else {
+                        this.schools = schoolsData || [];
+                    }
+
+                    if (logsError) {
+                        console.error('Logs Fetch Error:', logsError);
+                    } else {
+                        this.logs = logsData || [];
+                    }
+
                     this.loading = false;
                 },
 
                 get filteredSchools() {
                     return this.schools.filter(s => {
-                        const matchSearch = s.name.toLowerCase().includes(this.search.toLowerCase()) || (s.head_coach && s.head_coach.toLowerCase().includes(this.search.toLowerCase()));
+                        const nameMatch = s.name ? s.name.toLowerCase().includes(this.search.toLowerCase()) : false;
+                        const coachMatch = s.head_coach ? s.head_coach.toLowerCase().includes(this.search.toLowerCase()) : false;
+                        const matchSearch = nameMatch || coachMatch;
                         const matchDiv = this.divisionFilter === '' || s.division === this.divisionFilter;
                         return matchSearch && matchDiv;
                     });
