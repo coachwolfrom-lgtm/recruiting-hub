@@ -312,7 +312,7 @@ function cloudApp() {
                 if (s.camps && s.camps.length > 0) {
                     s.camps.forEach(c => {
                         if (!c.camp_date) return;
-                        let campDateStr = c.camp_date;
+                        let campDateStr = String(c.camp_date).split('T')[0];
                         days.forEach(day => {
                             if (day.dateStr === campDateStr) {
                                 day.camps.push({ ...c, schoolName: s.name });
