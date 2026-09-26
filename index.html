@@ -10,6 +10,8 @@
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.10/dist/cdn.min.js"></script>
     <!-- Supabase JS Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.42.0/dist/umd/supabase.min.js"></script>
+    <!-- External Config File for Credentials -->
+    <script src="config.js"></script>
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>[x-cloak] { display: none !important; }</style>
@@ -79,6 +81,7 @@
                             <option value="NWAC">NWAC</option>
                             <option value="GNAC">GNAC</option>
                         </select>
+                        <button @click="exportCSV()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 rounded-lg text-xs font-semibold text-slate-700">Export CSV</button>
                     </div>
                 </div>
 
@@ -141,7 +144,7 @@
             <!-- TAB 2: Timeline -->
             <div x-show="activeTab === 'timeline'">
                 <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3">
-                    <template x-for="log in logs" :key="log.id">
+                    <template x-for="log in sortedLogs" :key="log.id">
                         <div class="p-3 rounded-lg border border-slate-100 bg-slate-50 flex justify-between items-start">
                             <div>
                                 <div class="flex items-center gap-2 text-xs">
@@ -231,12 +234,63 @@
         </div>
     </div>
 
-    <!-- Script Logic -->
-    <script>
-        const SUPABASE_URL = 'https://uzhpfonasfmflwpwgkwb.supabase.co';
-        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY_HERE';
+    <!-- Log Interaction Modal -->
+    <div x-show="logModalOpen" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" x-cloak>
+        <div class="bg-white rounded-xl max-w-md w-full p-5 space-y-3">
+            <h3 class="text-lg font-bold">Log Coach Interaction</h3>
+            <form @submit.prevent="saveLog()" class="space-y-3 text-xs">
+                <div>
+                    <label class="font-semibold block mb-1">College Program</label>
+                    <select x-model="logForm.school_id" required class="w-full p-2 border rounded bg-white">
+                        <option value="">Select School...</option>
+                        <template x-for="s in schools" :key="s.id">
+                            <option :value="s.id" x-text="s.name"></option>
+                        </template>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="font-semibold block mb-1">Type</label>
+                        <select x-model="logForm.type" class="w-full p-2 border rounded bg-white">
+                            <option value="Email Sent">Email Sent</option>
+                            <option value="Coach Reply">Coach Reply</option>
+                            <option value="Phone Call">Phone Call</option>
+                            <option value="Camp Attended">Camp Attended</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="font-semibold block mb-1">Date</label>
+                        <input type="date" x-model="logForm.date" required class="w-full p-2 border rounded">
+                    </div>
+                </div>
+                <div>
+                    <label class="font-semibold block mb-1">Summary</label>
+                    <input type="text" x-model="logForm.summary" required placeholder="e.g., Sent Fall showcase schedule" class="w-full p-2 border rounded">
+                </div>
+                <div>
+                    <label class="font-semibold block mb-1">Details</label>
+                    <textarea x-model="logForm.details" rows="2" class="w-full p-2 border rounded" placeholder="Coach feedback or notes..."></textarea>
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" @click="logModalOpen = false" class="px-3 py-1 text-slate-600">Cancel</button>
+                    <button type="submit" class="px-3 py-1 bg-indigo-600 text-white rounded font-semibold">Save Log</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
-        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    <!-- Script Logic Reading directly from config.js -->
+    <script>
+        let supabaseClient;
+        try {
+            if (typeof SUPABASE_URL !== 'undefined' && typeof SUPABASE_ANON_KEY !== 'undefined') {
+                supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            } else {
+                console.error('config.js is missing or does not define SUPABASE_URL / SUPABASE_ANON_KEY');
+            }
+        } catch (e) {
+            console.error('Initialization error:', e);
+        }
 
         function cloudApp() {
             return {
@@ -254,6 +308,11 @@
                 logForm: { school_id: '', type: 'Email Sent', date: new Date().toISOString().split('T')[0], summary: '', details: '' },
 
                 async init() {
+                    if (!supabaseClient) {
+                        this.errorMessage = 'Supabase client failed to initialize. Make sure config.js is created and loaded properly.';
+                        this.loading = false;
+                        return;
+                    }
                     await this.fetchData();
                 },
 
@@ -261,7 +320,6 @@
                     this.loading = true;
                     this.errorMessage = '';
 
-                    // Relational query fetching schools along with all linked coaches and camps
                     const { data: schoolsData, error: schoolsError } = await supabaseClient
                         .from('schools')
                         .select('*, coaches(*), camps(*)')
@@ -291,12 +349,14 @@
                 get filteredSchools() {
                     return this.schools.filter(s => {
                         const nameMatch = s.name ? s.name.toLowerCase().includes(this.search.toLowerCase()) : false;
-                        const coachMatch = s.coaches ? s.coaches.some(c => c.name.toLowerCase().includes(this.search.toLowerCase())) : false;
+                        const coachMatch = s.coaches ? s.coaches.some(c => c.name && c.name.toLowerCase().includes(this.search.toLowerCase())) : false;
                         const matchSearch = nameMatch || coachMatch;
                         const matchDiv = this.divisionFilter === '' || s.division === this.divisionFilter;
                         return matchSearch && matchDiv;
                     });
                 },
+
+                get sortedLogs() { return this.logs; },
 
                 getSchoolName(id) {
                     const sch = this.schools.find(s => s.id === id);
@@ -342,7 +402,6 @@
                     this.loading = true;
                     let schoolId = this.editingId;
 
-                    // 1. Upsert School Main Record
                     if (schoolId) {
                         await supabaseClient.from('schools').update({
                             name: this.schoolForm.name,
@@ -361,7 +420,6 @@
                     }
 
                     if (schoolId) {
-                        // 2. Refresh linked Coaches
                         await supabaseClient.from('coaches').delete().eq('school_id', schoolId);
                         if (this.schoolForm.coaches.length > 0) {
                             const coachPayload = this.schoolForm.coaches.map(c => ({
@@ -373,7 +431,6 @@
                             await supabaseClient.from('coaches').insert(coachPayload);
                         }
 
-                        // 3. Refresh linked Camps
                         await supabaseClient.from('camps').delete().eq('school_id', schoolId);
                         if (this.schoolForm.camps.length > 0) {
                             const campPayload = this.schoolForm.camps.map(c => ({
@@ -394,6 +451,37 @@
                         await supabaseClient.from('schools').delete().eq('id', id);
                         await this.fetchData();
                     }
+                },
+
+                openLogModal() {
+                    this.logForm = { school_id: '', type: 'Email Sent', date: new Date().toISOString().split('T')[0], summary: '', details: '' };
+                    this.logModalOpen = true;
+                },
+
+                async saveLog() {
+                    await supabaseClient.from('communication_logs').insert([this.logForm]);
+                    this.logModalOpen = false;
+                    await this.fetchData();
+                },
+
+                async deleteLog(id) {
+                    await supabaseClient.from('communication_logs').delete().eq('id', id);
+                    await this.fetchData();
+                },
+
+                exportCSV() {
+                    let csv = 'College,Division,Mascot,Coaches,Camps\n';
+                    this.schools.forEach(s => {
+                        const coachNames = s.coaches ? s.coaches.map(c => `${c.name} (${c.role || 'Coach'})`).join('; ') : '';
+                        const campDates = s.camps ? s.camps.map(c => `${c.name || 'Camp'}: ${c.camp_date}`).join('; ') : '';
+                        csv += `"${s.name}","${s.division || ''}","${s.mascot || ''}","${coachNames}","${campDates}"\n`;
+                    });
+                    const blob = new Blob([csv], { type: 'text/csv' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.setAttribute('href', url);
+                    a.setAttribute('download', 'frankie_recruiting_contacts.csv');
+                    a.click();
                 }
             }
         }
