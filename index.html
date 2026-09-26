@@ -3,224 +3,153 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Recruiting Hub</title>
-    <!-- Tailwind CSS CDN -->
+    <title>Softball Recruiting Hub</title>
+    
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Supabase Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
     <!-- Alpine.js -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <!-- Supabase JS Client -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- FontAwesome for icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body class="bg-slate-100 min-h-screen font-sans" x-data="cloudApp()" x-init="init()">
+<body class="bg-slate-50 text-slate-900 font-sans antialiased" x-data="cloudApp">
+    
+    <!-- Global Notifications -->
+    <div x-show="toastMessage" class="fixed top-4 right-4 bg-emerald-600 text-white px-4 py-2 rounded shadow-lg z-50 transition-opacity" x-text="toastMessage" x-transition></div>
+    <div x-show="errorMessage" class="fixed top-4 right-4 bg-rose-600 text-white px-4 py-2 rounded shadow-lg z-50 transition-opacity" x-text="errorMessage" x-transition></div>
 
-    <!-- Header Navigation -->
-    <header class="bg-indigo-900 text-white shadow-md p-4 flex flex-col sm:flex-row justify-between items-center gap-4 sticky top-0 z-40">
-        <h1 class="text-xl font-bold flex items-center gap-2">
-            <i class="fa-solid fa-baseball-bat-ball text-amber-400"></i>
-            <span x-text="headerTitle"></span>
-        </h1>
-
-        <!-- Athlete Switcher & Navigation Tabs -->
-        <div class="flex flex-wrap items-center gap-3">
-            <template x-if="athletes.length > 1">
-                <div class="flex items-center gap-2">
-                    <label class="text-sm font-medium text-indigo-200">Athlete:</label>
-                    <select class="bg-indigo-800 text-white border border-indigo-700 rounded px-2 py-1 text-sm focus:outline-none"
-                            @change="switchAthlete($event.target.value)">
-                        <template x-for="athlete in athletes" :key="athlete.id">
-                            <option :value="athlete.id" :selected="athlete.id === selectedAthleteId" x-text="athlete.first_name + ' ' + athlete.last_name"></option>
-                        </template>
-                    </select>
-                </div>
-            </template>
-
-            <!-- Navigation Tabs -->
-            <nav class="flex gap-2 bg-indigo-950 p-1 rounded-lg">
-                <button @click="activeTab = 'colleges'" 
-                        :class="activeTab === 'colleges' ? 'bg-indigo-600 text-white' : 'text-indigo-300 hover:text-white'"
-                        class="px-3 py-1.5 rounded text-sm font-medium transition">
-                    College Programs
-                </button>
-                <button @click="activeTab = 'calendar'" 
-                        :class="activeTab === 'calendar' ? 'bg-indigo-600 text-white' : 'text-indigo-300 hover:text-white'"
-                        class="px-3 py-1.5 rounded text-sm font-medium transition">
-                    Master Calendar
-                </button>
-                <button @click="activeTab = 'profile'" 
-                        :class="activeTab === 'profile' ? 'bg-indigo-600 text-white' : 'text-indigo-300 hover:text-white'"
-                        class="px-3 py-1.5 rounded text-sm font-medium transition">
-                    Player Profile
-                </button>
-            </nav>
+    <!-- Top Navigation -->
+    <header class="bg-indigo-700 text-white shadow-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <i class="fa-solid fa-baseball text-2xl text-indigo-200"></i>
+                <h1 class="text-xl font-bold tracking-tight">Recruiting Hub</h1>
+            </div>
+            
+            <!-- Athlete Selector -->
+            <div class="flex items-center gap-2" x-show="athletes.length > 0">
+                <i class="fa-solid fa-user text-indigo-300"></i>
+                <select x-model="selectedAthleteId" @change="switchAthlete" class="bg-indigo-800 border border-indigo-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2">
+                    <template x-for="athlete in athletes" :key="athlete.id">
+                        <option :value="athlete.id" x-text="athlete.name"></option>
+                    </template>
+                </select>
+            </div>
         </div>
     </header>
 
-    <!-- Main Container -->
-    <main class="max-w-7xl mx-auto p-4 sm:p-6">
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col md:flex-row gap-8">
+        
+        <!-- Sidebar Navigation -->
+        <aside class="w-full md:w-64 flex-shrink-0">
+            <nav class="space-y-1">
+                <button @click="activeTab = 'schools'" :class="{'bg-indigo-50 text-indigo-700': activeTab === 'schools', 'text-slate-600 hover:bg-slate-100': activeTab !== 'schools'}" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors text-left">
+                    <i class="fa-solid fa-graduation-cap w-5"></i> College Programs
+                </button>
+                <button @click="activeTab = 'profile'" :class="{'bg-indigo-50 text-indigo-700': activeTab === 'profile', 'text-slate-600 hover:bg-slate-100': activeTab !== 'profile'}" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors text-left">
+                    <i class="fa-solid fa-id-card w-5"></i> Athlete Profile
+                </button>
+                <button @click="activeTab = 'calendar'" :class="{'bg-indigo-50 text-indigo-700': activeTab === 'calendar', 'text-slate-600 hover:bg-slate-100': activeTab !== 'calendar'}" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors text-left">
+                    <i class="fa-solid fa-calendar-days w-5"></i> Master Calendar
+                </button>
+                <button @click="activeTab = 'timeline'" :class="{'bg-indigo-50 text-indigo-700': activeTab === 'timeline', 'text-slate-600 hover:bg-slate-100': activeTab !== 'timeline'}" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors text-left">
+                    <i class="fa-solid fa-comments w-5"></i> Communication Log
+                </button>
+            </nav>
+        </aside>
 
-        <!-- Error Banner -->
-        <template x-if="errorMessage">
-            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
-                <strong class="font-bold">Error: </strong>
-                <span class="block sm:inline" x-text="errorMessage"></span>
-            </div>
-        </template>
-
-        <!-- Loading Spinner -->
-        <template x-if="loading">
-            <div class="flex justify-center items-center py-20">
-                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-            </div>
-        </template>
-
-        <!-- TAB 1: COLLEGE PROGRAMS -->
-        <div x-show="!loading && activeTab === 'colleges'" class="space-y-6">
+        <!-- Main Content Area -->
+        <div class="flex-1 min-w-0">
             
-            <!-- Filters & Search Bar -->
-            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-4 justify-between items-center">
-                <div class="w-full md:w-1/3">
-                    <input type="text" x-model="searchQuery" placeholder="Search schools or mascots..." 
-                           class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                </div>
-
-                <div class="flex flex-wrap gap-3 w-full md:w-auto">
-                    <!-- Division Filter -->
-                    <select x-model="selectedDivision" class="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none">
-                        <option value="ALL">All Divisions</option>
-                        <template x-for="div in divisions" :key="div.id || div.name">
-                            <option :value="div.name" x-text="div.name"></option>
-                        </template>
-                    </select>
-
-                    <!-- Interest Level Filter -->
-                    <select x-model="selectedInterest" class="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none">
-                        <option value="ALL">All Interest Levels</option>
-                        <template x-for="intLevel in interestLevels" :key="intLevel.id || intLevel.name">
-                            <option :value="intLevel.name" x-text="intLevel.name"></option>
-                        </template>
-                    </select>
-                </div>
+            <!-- Loading Indicator -->
+            <div x-show="loading" class="flex justify-center items-center py-12">
+                <i class="fa-solid fa-circle-notch fa-spin text-4xl text-indigo-600"></i>
             </div>
 
-            <!-- School Cards Grid -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <template x-for="school in filteredSchools" :key="school.id">
-                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col justify-between hover:shadow-md transition">
+            <!-- Content Wrapper (Hidden while loading) -->
+            <div x-show="!loading">
+
+                <!-- TAB 1: College Programs -->
+                <div x-show="activeTab === 'schools'" class="space-y-6">
+                    <div class="flex justify-between items-center">
                         <div>
-                            <div class="flex justify-between items-start gap-2 mb-2">
-                                <h3 class="font-bold text-lg text-slate-800" x-text="school.name"></h3>
-                                <span class="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200" x-text="school.division"></span>
-                            </div>
-                            <p class="text-sm text-slate-500 mb-4" x-text="school.mascot ? 'Mascot: ' + school.mascot : ''"></p>
-                            
-                            <!-- Interest & Status -->
-                            <div class="mb-4">
-                                <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Interest:</span>
-                                <span class="ml-1 text-sm font-medium text-slate-700" x-text="school.interest || 'Not Set'"></span>
-                            </div>
-
-                            <!-- Associated Camps Section -->
-                            <template x-if="school.camps && school.camps.length > 0">
-                                <div class="mt-4 pt-3 border-t border-slate-100">
-                                    <h4 class="text-xs font-bold uppercase tracking-wider text-indigo-600 mb-2">Upcoming Camps</h4>
-                                    <div class="space-y-1.5">
-                                        <template x-for="camp in school.camps" :key="camp.id">
-                                            <div class="bg-indigo-50/60 p-2 rounded text-xs flex justify-between items-center border border-indigo-100">
-                                                <span class="font-medium text-slate-700" x-text="camp.name || 'Camp'"></span>
-                                                <span class="text-indigo-600 font-semibold" x-text="camp.camp_date ? camp.camp_date.split('T')[0] : ''"></span>
-                                            </div>
-                                        </template>
-                                    </div>
-                                </div>
-                            </template>
+                            <h2 class="text-2xl font-bold text-slate-900">Target Schools</h2>
+                            <p class="text-slate-500 text-sm">Manage recruiting targets and coach contacts.</p>
                         </div>
+                        <button @click="openSchoolModal" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg text-sm shadow transition">
+                            <i class="fa-solid fa-plus mr-1"></i> Add School
+                        </button>
                     </div>
-                </template>
-            </div>
-        </div>
 
-        <!-- TAB 2: MASTER CALENDAR -->
-        <div x-show="!loading && activeTab === 'calendar'" class="space-y-6">
-            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                
-                <!-- Calendar Header controls -->
-                <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-xl font-bold text-slate-800" x-text="monthName + ' ' + currentYear"></h2>
-                    <div class="flex gap-2">
-                        <button @click="prevMonth()" class="px-3 py-1.5 border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-50 transition">Previous</button>
-                        <button @click="nextMonth()" class="px-3 py-1.5 border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-50 transition">Next</button>
+                    <!-- Filter Bar -->
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <input type="text" x-model="search" placeholder="Search schools..." class="border-slate-300 rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 w-full">
+                        <!-- Add select dropdowns bound to x-model="divisionFilter", etc. here -->
                     </div>
-                </div>
 
-                <!-- Day Headers -->
-                <div class="grid grid-cols-7 gap-2 text-center font-semibold text-slate-500 text-xs sm:text-sm mb-2">
-                    <div>Sun</div>
-                    <div>Mon</div>
-                    <div>Tue</div>
-                    <div>Wed</div>
-                    <div>Thu</div>
-                    <div>Fri</div>
-                    <div>Sat</div>
-                </div>
-
-                <!-- Days Grid -->
-                <div class="grid grid-cols-7 gap-2">
-                    <template x-for="day in calendarDays">
-                        <div :class="day.inactive ? 'bg-slate-50 text-slate-300 border-dashed' : 'bg-white text-slate-700 border-slate-200'"
-                             class="min-h-[100px] sm:min-h-[120px] p-2 rounded-lg border flex flex-col justify-between overflow-hidden">
-                            <div class="font-bold text-sm" x-text="day.dayNum"></div>
-                            
-                            <!-- Camps on this day -->
-                            <div class="flex flex-col gap-1 overflow-y-auto max-h-[80px]">
-                                <template x-for="camp in day.camps" :key="camp.id">
-                                    <div class="bg-indigo-600 text-white text-[10px] sm:text-xs p-1 rounded leading-tight shadow-sm">
-                                        <span class="font-bold block truncate" x-text="camp.schoolName"></span>
-                                        <span class="truncate opacity-90" x-text="camp.name"></span>
-                                    </div>
-                                </template>
+                    <!-- Schools Grid -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <template x-for="school in filteredSchools" :key="school.id">
+                            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                                <h3 class="text-lg font-bold text-slate-900" x-text="school.name"></h3>
+                                <p class="text-sm text-slate-500" x-text="school.mascot"></p>
                             </div>
-                        </div>
-                    </template>
-                </div>
-
-            </div>
-        </div>
-
-        <!-- TAB 3: PLAYER PROFILE -->
-        <div x-show="!loading && activeTab === 'profile'" class="space-y-6">
-            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-6">
-                <h2 class="text-xl font-bold text-slate-800 border-b pb-3">Athlete Recruiting Profile</h2>
-                
-                <!-- Basic Profile Details / Questions -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <template x-for="item in profileItems" :key="item.id">
-                        <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                            <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1" x-text="item.label || item.category"></label>
-                            <div class="text-slate-800 font-medium" x-text="item.value || 'Not provided'"></div>
-                        </div>
-                    </template>
-                </div>
-
-                <!-- Tournaments Section -->
-                <div class="mt-6">
-                    <h3 class="text-lg font-semibold text-slate-700 mb-3">Target Tournaments</h3>
-                    <div class="space-y-2">
-                        <template x-for="tourn in profileTournaments" :key="tourn.id">
-                            <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 flex justify-between items-center">
-                                <span class="font-medium text-slate-800" x-text="tourn.name"></span>
-                                <span class="text-sm text-slate-500" x-text="tourn.dates || tourn.location"></span>
+                        </template>
+                        <template x-if="filteredSchools.length === 0">
+                            <div class="col-span-full text-center py-12 text-slate-500">
+                                No programs found matching your criteria.
                             </div>
                         </template>
                     </div>
                 </div>
+
+                <!-- TAB 2: Athlete Profile -->
+                <div x-show="activeTab === 'profile'" class="space-y-6">
+                    <h2 class="text-2xl font-bold text-slate-900">Athlete Profile</h2>
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                        <p class="text-slate-500">Profile stats, questionnaires, and social links go here.</p>
+                    </div>
+                </div>
+
+                <!-- TAB 3: Master Calendar -->
+                <div x-show="activeTab === 'calendar'" class="space-y-6">
+                    <h2 class="text-2xl font-bold text-slate-900">Master Calendar</h2>
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                        <p class="text-slate-500">Tournament schedules, camp dates, and upcoming calls go here.</p>
+                    </div>
+                </div>
+
+                <!-- TAB 4: Communication Timeline -->
+                <div x-show="activeTab === 'timeline'" class="space-y-6">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-2xl font-bold text-slate-900">Communication Log</h2>
+                        <button @click="openLogModal" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg text-sm shadow transition">
+                            <i class="fa-solid fa-plus mr-1"></i> Log Interaction
+                        </button>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-4">
+                        <template x-for="log in logs" :key="log.id">
+                            <div class="border-b border-slate-100 pb-4 last:border-0 last:pb-0">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="text-xs font-bold bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded uppercase" x-text="log.interaction_type || 'Note'"></span>
+                                    <span class="text-sm font-bold text-slate-900" x-text="log.schoolName || 'General'"></span>
+                                </div>
+                                <p class="text-sm text-slate-600 whitespace-pre-line" x-text="log.notes"></p>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
             </div>
         </div>
-
     </main>
 
-    <!-- Config & App Logic -->
+    <!-- Configuration and Application Logic Scripts -->
     <script src="config.js"></script>
     <script src="app.js"></script>
 </body>
