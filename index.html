@@ -10,18 +10,19 @@
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <!-- Supabase JS Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- App Logic -->
-    <script src="app.js"></script>
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="bg-slate-100 min-h-screen font-sans" x-data="cloudApp()" x-init="init()">
 
     <!-- Header Navigation -->
-    <header class="bg-indigo-900 text-white shadow-md p-4 flex flex-col sm:flex-row justify-between items-center gap-4">
-        <h1 class="text-2xl font-bold flex items-center gap-2">
-            🥎 <span x-text="headerTitle"></span>
+    <header class="bg-indigo-900 text-white shadow-md p-4 flex flex-col sm:flex-row justify-between items-center gap-4 sticky top-0 z-40">
+        <h1 class="text-xl font-bold flex items-center gap-2">
+            <i class="fa-solid fa-baseball-bat-ball text-amber-400"></i>
+            <span x-text="headerTitle"></span>
         </h1>
 
-        <!-- Athlete Switcher (if multiple athletes exist) -->
+        <!-- Athlete Switcher -->
         <div class="flex items-center gap-3">
             <template x-if="athletes.length > 1">
                 <div class="flex items-center gap-2">
@@ -183,5 +184,9 @@
         </div>
 
     </main>
+
+    <!-- Config & App Logic -->
+    <script src="config.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>
