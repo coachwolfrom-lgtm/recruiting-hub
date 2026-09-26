@@ -1,707 +1,85 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Frankie's Softball Recruiting Hub</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Alpine.js -->
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.10/dist/cdn.min.js"></script>
-    <!-- Supabase JS Client -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.42.0/dist/umd/supabase.min.js"></script>
-    <!-- External Config File for Credentials -->
-    <script src="config.js"></script>
-    <!-- FontAwesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>[x-cloak] { display: none !important; }</style>
-</head>
-<body class="bg-slate-50 text-slate-800 font-sans" x-data="cloudApp()" x-init="init()">
-
-    <!-- Header -->
-    <header class="bg-indigo-900 text-white shadow-md sticky top-0 z-40">
-        <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-3">
-            <div>
-                <h1 class="text-xl font-bold flex items-center gap-2">
-                    <i class="fa-solid fa-baseball-bat-ball text-amber-400"></i> Frankie's Recruiting Hub
-                </h1>
-                <p class="text-indigo-200 text-xs">Cloud-Synced Across All Devices</p>
-            </div>
-            <div class="flex gap-2 w-full sm:w-auto justify-end">
-                <button @click="openSchoolModal()" class="bg-amber-500 hover:bg-amber-600 text-indigo-950 font-semibold px-3 py-1.5 rounded-lg text-sm shadow transition flex items-center gap-1.5">
-                    <i class="fa-solid fa-plus"></i> Add School
-                </button>
-                <button @click="openLogModal()" class="bg-indigo-700 hover:bg-indigo-600 text-white font-semibold px-3 py-1.5 rounded-lg text-sm shadow transition flex items-center gap-1.5">
-                    <i class="fa-solid fa-comments"></i> Log Note
-                </button>
-            </div>
-        </div>
-    </header>
-
-    <!-- Main Dashboard -->
-    <main class="max-w-7xl mx-auto px-4 py-6">
-        
-        <!-- Copy Toast Notification -->
-        <div x-show="toastMessage" x-transition class="fixed bottom-5 right-5 bg-slate-900 text-white px-4 py-2 rounded-lg text-xs font-semibold shadow-lg z-50 flex items-center gap-2" x-cloak>
-            <i class="fa-solid fa-check text-emerald-400"></i>
-            <span x-text="toastMessage"></span>
-        </div>
-
-        <!-- Error Banner -->
-        <div x-show="errorMessage" class="mb-6 p-4 bg-rose-100 border border-rose-300 text-rose-800 rounded-xl text-sm font-semibold flex items-center justify-between" x-cloak>
-            <div class="flex items-center gap-2">
-                <i class="fa-solid fa-triangle-exclamation text-rose-600 text-lg"></i>
-                <span x-text="errorMessage"></span>
-            </div>
-            <button @click="errorMessage = ''" class="text-rose-600 hover:text-rose-900">&times;</button>
-        </div>
-
-        <!-- Loading Spinner -->
-        <div x-show="loading" class="text-center py-20">
-            <i class="fa-solid fa-spinner fa-spin text-3xl text-indigo-600 mb-2"></i>
-            <p class="text-sm text-slate-500">Syncing database...</p>
-        </div>
-
-        <div x-show="!loading" x-cloak>
-            <!-- Tabs -->
-            <div class="flex border-b border-slate-200 mb-6 gap-6">
-                <button @click="activeTab = 'schools'" :class="activeTab === 'schools' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'" class="pb-2 border-b-2 font-semibold text-sm transition">
-                    College Programs (<span x-text="schools.length"></span>)
-                </button>
-                <button @click="activeTab = 'profile'" :class="activeTab === 'profile' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'" class="pb-2 border-b-2 font-semibold text-sm transition">
-                    <i class="fa-solid fa-id-card text-xs mr-1"></i> Player Profile & Questionnaires
-                </button>
-                <button @click="activeTab = 'timeline'" :class="activeTab === 'timeline' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'" class="pb-2 border-b-2 font-semibold text-sm transition">
-                    Communication Log (<span x-text="logs.length"></span>)
-                </button>
-            </div>
-
-            <!-- TAB 1: Schools -->
-            <div x-show="activeTab === 'schools'">
-                <div class="flex flex-col sm:flex-row justify-between gap-3 mb-6">
-                    <input type="text" x-model="search" placeholder="Search college, mascot, coach..." class="w-full sm:w-64 px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
-                    <div class="flex flex-wrap gap-2">
-                        <select x-model="divisionFilter" class="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
-                            <option value="">All Divisions</option>
-                            <template x-for="div in divisions" :key="div.id">
-                                <option :value="div.name" x-text="div.name"></option>
-                            </template>
-                        </select>
-                        <select x-model="majorFilter" class="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
-                            <option value="">All Majors</option>
-                            <template x-for="m in allMajors" :key="m.id">
-                                <option :value="m.id" x-text="m.name"></option>
-                            </template>
-                        </select>
-                        <select x-model="interestFilter" class="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
-                            <option value="">All Interest Levels</option>
-                            <template x-for="item in interestLevels" :key="item.id">
-                                <option :value="item.name" x-text="item.name"></option>
-                            </template>
-                        </select>
-                        <button @click="exportCSV()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 rounded-lg text-xs font-semibold text-slate-700">Export CSV</button>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <template x-for="school in filteredSchools" :key="school.id">
-                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col justify-between">
-                            <div>
-                                <div class="flex justify-between items-start">
-                                    <div>
-                                        <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 uppercase" x-text="school.division || 'N/A'"></span>
-                                        <h3 class="text-base font-bold text-slate-900 mt-1" x-text="school.name"></h3>
-                                        <p class="text-xs text-slate-500" x-text="school.mascot ? 'Mascot: ' + school.mascot : ''"></p>
-                                    </div>
-                                    <span class="text-xs font-semibold px-2 py-0.5 rounded bg-amber-50 text-amber-700" x-text="school.interest || 'Tracking'"></span>
-                                </div>
-
-                                <div class="mt-3 pt-2 border-t border-slate-100 text-xs">
-                                    <p class="font-bold text-emerald-800 mb-1"><i class="fa-solid fa-graduation-cap"></i> Offered Majors:</p>
-                                    <template x-if="!school.majors || school.majors.length === 0">
-                                        <p class="text-slate-400 italic">No majors assigned</p>
-                                    </template>
-                                    <div class="flex flex-wrap gap-1">
-                                        <template x-for="m in school.majors" :key="m.id">
-                                            <span class="bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-semibold" x-text="m.name"></span>
-                                        </template>
-                                    </div>
-                                </div>
-
-                                <div class="mt-3 pt-2 border-t border-slate-100 text-xs">
-                                    <p class="font-bold text-slate-700 mb-1">Coaching Staff:</p>
-                                    <template x-if="!school.coaches || school.coaches.length === 0">
-                                        <p class="text-slate-400 italic">No coaches added</p>
-                                    </template>
-                                    <div class="space-y-1">
-                                        <template x-for="c in school.coaches" :key="c.id">
-                                            <div class="flex justify-between items-center text-slate-600 bg-slate-50 p-1.5 rounded">
-                                                <div>
-                                                    <span class="font-semibold text-slate-800" x-text="c.name"></span>
-                                                    <span class="text-[10px] text-slate-500" x-text="'(' + (c.role || 'Coach') + ')'"></span>
-                                                </div>
-                                                <a x-show="c.email" :href="'mailto:' + c.email" class="text-indigo-600 hover:underline"><i class="fa-regular fa-envelope"></i></a>
-                                            </div>
-                                        </template>
-                                    </div>
-                                </div>
-
-                                <div class="mt-3 pt-2 border-t border-slate-100 text-xs">
-                                    <p class="font-bold text-rose-700 mb-1"><i class="fa-regular fa-calendar-days"></i> Upcoming Camps:</p>
-                                    <template x-if="!school.camps || school.camps.length === 0">
-                                        <p class="text-slate-400 italic">No camps scheduled</p>
-                                    </template>
-                                    <div class="flex flex-wrap gap-1">
-                                        <template x-for="camp in school.camps" :key="camp.id">
-                                            <span class="bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded text-[11px] font-semibold" x-text="(camp.name ? camp.name + ': ' : '') + camp.camp_date"></span>
-                                        </template>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="mt-4 pt-2 border-t border-slate-100 flex justify-between items-center text-xs">
-                                <button @click="editSchool(school)" class="text-slate-600 hover:text-indigo-600 font-medium flex items-center gap-1"><i class="fa-solid fa-pen"></i> Manage Program</button>
-                                <button @click="deleteSchool(school.id)" class="text-rose-500 hover:text-rose-700"><i class="fa-solid fa-trash"></i></button>
-                            </div>
-                        </div>
-                    </template>
-                </div>
-            </div>
-
-            <!-- TAB 2: Player Profile & Questionnaires -->
-            <div x-show="activeTab === 'profile'">
-                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-6">
-                    <div class="flex flex-col sm:flex-row justify-between sm:items-center border-b pb-4 gap-2">
-                        <div>
-                            <h2 class="text-lg font-bold text-slate-900"><i class="fa-solid fa-clipboard-list text-indigo-600 mr-2"></i> Player Profile & Questionnaire Reference Data</h2>
-                            <p class="text-xs text-slate-500">Quickly copy metrics, addresses, honors, and responses when filling out college recruiting questionnaires.</p>
-                        </div>
-                    </div>
-
-                    <!-- Categories Grid -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <template x-for="cat in profileCategories" :key="cat">
-                            <div class="bg-slate-50/70 border border-slate-200 rounded-xl p-4">
-                                <h3 class="font-bold text-sm text-indigo-950 uppercase tracking-wider mb-3 border-b border-slate-200 pb-2" x-text="cat"></h3>
-                                <div class="space-y-3">
-                                    <template x-for="item in profileItemsByCategory(cat)" :key="item.id">
-                                        <div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm space-y-2">
-                                            <div class="flex items-center justify-between">
-                                                <span class="text-[11px] font-bold text-slate-500 uppercase tracking-tight" x-text="item.label"></span>
-                                                <button @click="deleteProfileField(item.id)" class="text-slate-300 hover:text-rose-500 text-xs" title="Delete Field"><i class="fa-solid fa-xmark"></i></button>
-                                            </div>
-
-                                            <!-- 1. STANDARD TEXT FIELD -->
-                                            <template x-if="item.value_type === 'text'">
-                                                <div class="flex items-center gap-2">
-                                                    <input type="text" x-model="item.data.text" @change="updateProfileItem(item)" class="w-full text-xs font-semibold text-slate-800 border-b border-transparent hover:border-slate-300 focus:border-indigo-500 focus:outline-none bg-transparent py-0.5">
-                                                    <button @click="copyToClipboard(item.data.text, item.label)" class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded transition" title="Copy"><i class="fa-regular fa-copy"></i></button>
-                                                </div>
-                                            </template>
-
-                                            <!-- 2. LINK FIELD -->
-                                            <template x-if="item.value_type === 'link'">
-                                                <div class="flex items-center gap-2">
-                                                    <input type="text" x-model="item.data.text" @change="updateProfileItem(item)" class="w-full text-xs font-semibold text-indigo-600 underline border-b border-transparent hover:border-slate-300 focus:border-indigo-500 focus:outline-none bg-transparent py-0.5">
-                                                    <a x-show="item.data.text" :href="item.data.text" target="_blank" class="p-1.5 text-slate-400 hover:text-indigo-600"><i class="fa-solid fa-external-link-alt text-xs"></i></a>
-                                                    <button @click="copyToClipboard(item.data.text, item.label)" class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded transition" title="Copy"><i class="fa-regular fa-copy"></i></button>
-                                                </div>
-                                            </template>
-
-                                            <!-- 3. ADDRESS (Multi-column parts) -->
-                                            <template x-if="item.value_type === 'address'">
-                                                <div class="space-y-2">
-                                                    <div class="grid grid-cols-12 gap-1">
-                                                        <input type="text" x-model="item.data.street" @change="updateProfileItem(item)" placeholder="Street" class="col-span-12 p-1 border rounded text-xs">
-                                                        <input type="text" x-model="item.data.city" @change="updateProfileItem(item)" placeholder="City" class="col-span-6 p-1 border rounded text-xs">
-                                                        <input type="text" x-model="item.data.state" @change="updateProfileItem(item)" placeholder="State" class="col-span-3 p-1 border rounded text-xs">
-                                                        <input type="text" x-model="item.data.zip" @change="updateProfileItem(item)" placeholder="Zip" class="col-span-3 p-1 border rounded text-xs">
-                                                    </div>
-                                                    <div class="flex justify-end">
-                                                        <button @click="copyAddress(item.data, item.label)" class="text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded font-semibold flex items-center gap-1">
-                                                            <i class="fa-regular fa-copy"></i> Copy Full Address
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </template>
-
-                                            <!-- 4. LIST / TAGS (Multiple items like Honors, Tournaments) -->
-                                            <template x-if="item.value_type === 'list'">
-                                                <div class="space-y-2">
-                                                    <div class="flex flex-wrap gap-1.5">
-                                                        <template x-for="(val, idx) in item.data.items" :key="idx">
-                                                            <div class="bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs px-2 py-1 rounded-md flex items-center gap-1.5 font-medium">
-                                                                <span x-text="val"></span>
-                                                                <button @click="copyToClipboard(val, item.label)" class="text-indigo-400 hover:text-indigo-700" title="Copy item"><i class="fa-regular fa-copy text-[10px]"></i></button>
-                                                                <button @click="removeListItem(item, idx)" class="text-indigo-400 hover:text-rose-600 font-bold ml-1">&times;</button>
-                                                            </div>
-                                                        </template>
-                                                    </div>
-                                                    <div class="flex gap-1 pt-1">
-                                                        <input type="text" x-model="item.newItemText" @keydown.enter.prevent="addListItem(item)" placeholder="Add new item..." class="w-full p-1 border rounded text-xs">
-                                                        <button @click="addListItem(item)" class="px-2 py-1 bg-indigo-600 text-white rounded text-xs font-semibold hover:bg-indigo-700">Add</button>
-                                                    </div>
-                                                </div>
-                                            </template>
-                                        </div>
-                                    </template>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-            </div>
-
-            <!-- TAB 3: Communication Log -->
-            <div x-show="activeTab === 'timeline'">
-                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3">
-                    <template x-for="log in sortedLogs" :key="log.id">
-                        <div class="p-3 rounded-lg border border-slate-100 bg-slate-50 flex justify-between items-start">
-                            <div>
-                                <div class="flex items-center gap-2 text-xs">
-                                    <span class="font-bold text-indigo-900" x-text="getSchoolName(log.school_id)"></span>
-                                    <span class="text-slate-400" x-text="log.date"></span>
-                                    <span class="bg-slate-200 px-1.5 py-0.2 rounded text-[10px]" x-text="log.type"></span>
-                                </div>
-                                <p class="text-sm font-medium text-slate-800 mt-1" x-text="log.summary"></p>
-                                <p class="text-xs text-slate-500" x-text="log.details"></p>
-                            </div>
-                            <button @click="deleteLog(log.id)" class="text-slate-400 hover:text-rose-500 text-xs"><i class="fa-solid fa-trash"></i></button>
-                        </div>
-                    </template>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <!-- School Modal -->
-    <div x-show="schoolModalOpen" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" x-cloak>
-        <div class="bg-white rounded-xl max-w-xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div class="flex justify-between items-center border-b pb-2">
-                <h3 class="text-lg font-bold text-indigo-950" x-text="editingId ? 'Manage Program Details' : 'Add New Program'"></h3>
-                <button @click="schoolModalOpen = false" class="text-slate-400 hover:text-slate-700">&times;</button>
-            </div>
-
-            <form @submit.prevent="saveSchool()" class="space-y-4 text-xs">
-                <div class="space-y-2">
-                    <h4 class="font-bold text-slate-700 text-sm">General Information</h4>
-                    <div>
-                        <label class="font-semibold block mb-1">College Name</label>
-                        <input type="text" x-model="schoolForm.name" required class="w-full p-2 border rounded bg-slate-50">
-                    </div>
-                    <div class="grid grid-cols-3 gap-2">
-                        <div>
-                            <label class="font-semibold block mb-1">Division</label>
-                            <select x-model="schoolForm.division" class="w-full p-2 border rounded bg-white">
-                                <option value="">Select Division...</option>
-                                <template x-for="div in divisions" :key="div.id">
-                                    <option :value="div.name" x-text="div.name"></option>
-                                </template>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="font-semibold block mb-1">Mascot</label>
-                            <input type="text" x-model="schoolForm.mascot" placeholder="Wildcats, Huskies..." class="w-full p-2 border rounded">
-                        </div>
-                        <div>
-                            <label class="font-semibold block mb-1">Interest Level</label>
-                            <select x-model="schoolForm.interest" class="w-full p-2 border rounded bg-white">
-                                <option value="">Select Interest...</option>
-                                <template x-for="item in interestLevels" :key="item.id">
-                                    <option :value="item.name" x-text="item.name"></option>
-                                </template>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="space-y-2 border-t pt-3">
-                    <div class="flex justify-between items-center">
-                        <h4 class="font-bold text-emerald-800 text-sm"><i class="fa-solid fa-graduation-cap"></i> Majors Offered</h4>
-                        <div class="flex gap-1 items-center">
-                            <input type="text" x-model="newMajorName" placeholder="New Major..." class="p-1 border rounded text-[11px] w-28">
-                            <button type="button" @click="addNewMajor()" class="text-emerald-700 font-semibold text-[11px] hover:underline">+ Add</button>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-2 bg-emerald-50/50 p-2.5 rounded border border-emerald-100 max-h-32 overflow-y-auto">
-                        <template x-for="m in allMajors" :key="m.id">
-                            <label class="flex items-center gap-2 cursor-pointer text-slate-700">
-                                <input type="checkbox" :value="m.id" x-model="schoolForm.selectedMajorIds" class="rounded text-emerald-600 focus:ring-emerald-500">
-                                <span x-text="m.name"></span>
-                            </label>
-                        </template>
-                    </div>
-                </div>
-
-                <div class="space-y-2 border-t pt-3">
-                    <div class="flex justify-between items-center">
-                        <h4 class="font-bold text-slate-700 text-sm">Coaches</h4>
-                        <button type="button" @click="addCoachRow()" class="text-indigo-600 font-semibold hover:underline"><i class="fa-solid fa-plus"></i> Add Coach</button>
-                    </div>
-                    <div class="space-y-2">
-                        <template x-for="(c, idx) in schoolForm.coaches" :key="idx">
-                            <div class="grid grid-cols-12 gap-1 items-center bg-slate-50 p-2 rounded border border-slate-200">
-                                <input type="text" x-model="c.name" placeholder="Name" required class="col-span-4 p-1 border rounded">
-                                <input type="text" x-model="c.role" placeholder="Role (e.g. Pitching Coach)" class="col-span-4 p-1 border rounded">
-                                <input type="email" x-model="c.email" placeholder="Email" class="col-span-3 p-1 border rounded">
-                                <button type="button" @click="removeCoachRow(idx)" class="col-span-1 text-rose-500 hover:text-rose-700 text-center"><i class="fa-solid fa-xmark"></i></button>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-
-                <div class="space-y-2 border-t pt-3">
-                    <div class="flex justify-between items-center">
-                        <h4 class="font-bold text-rose-700 text-sm">Camp Dates</h4>
-                        <button type="button" @click="addCampRow()" class="text-rose-600 font-semibold hover:underline"><i class="fa-solid fa-plus"></i> Add Camp</button>
-                    </div>
-                    <div class="space-y-2">
-                        <template x-for="(camp, idx) in schoolForm.camps" :key="idx">
-                            <div class="grid grid-cols-12 gap-1 items-center bg-rose-50 p-2 rounded border border-rose-200">
-                                <input type="text" x-model="camp.name" placeholder="Camp Name (e.g. Fall Prospect)" class="col-span-6 p-1 border rounded">
-                                <input type="text" x-model="camp.camp_date" placeholder="Date (e.g. 9/26/26)" required class="col-span-5 p-1 border rounded">
-                                <button type="button" @click="removeCampRow(idx)" class="col-span-1 text-rose-500 hover:text-rose-700 text-center"><i class="fa-solid fa-xmark"></i></button>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-
-                <div class="flex justify-end gap-2 border-t pt-3">
-                    <button type="button" @click="schoolModalOpen = false" class="px-4 py-2 text-slate-600 font-medium">Cancel</button>
-                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded font-semibold shadow hover:bg-indigo-700">Save Program</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Log Interaction Modal -->
-    <div x-show="logModalOpen" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" x-cloak>
-        <div class="bg-white rounded-xl max-w-md w-full p-5 space-y-3">
-            <h3 class="text-lg font-bold">Log Coach Interaction</h3>
-            <form @submit.prevent="saveLog()" class="space-y-3 text-xs">
-                <div>
-                    <label class="font-semibold block mb-1">College Program</label>
-                    <select x-model="logForm.school_id" required class="w-full p-2 border rounded bg-white">
-                        <option value="">Select School...</option>
-                        <template x-for="s in schools" :key="s.id">
-                            <option :value="s.id" x-text="s.name"></option>
-                        </template>
-                    </select>
-                </div>
-                <div class="grid grid-cols-2 gap-2">
-                    <div>
-                        <label class="font-semibold block mb-1">Type</label>
-                        <select x-model="logForm.type" class="w-full p-2 border rounded bg-white">
-                            <option value="Email Sent">Email Sent</option>
-                            <option value="Coach Reply">Coach Reply</option>
-                            <option value="Phone Call">Phone Call</option>
-                            <option value="Camp Attended">Camp Attended</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="font-semibold block mb-1">Date</label>
-                        <input type="date" x-model="logForm.date" required class="w-full p-2 border rounded">
-                    </div>
-                </div>
-                <div>
-                    <label class="font-semibold block mb-1">Summary</label>
-                    <input type="text" x-model="logForm.summary" required placeholder="e.g., Sent Fall showcase schedule" class="w-full p-2 border rounded">
-                </div>
-                <div>
-                    <label class="font-semibold block mb-1">Details</label>
-                    <textarea x-model="logForm.details" rows="2" class="w-full p-2 border rounded" placeholder="Coach feedback or notes..."></textarea>
-                </div>
-                <div class="flex justify-end gap-2 pt-2">
-                    <button type="button" @click="logModalOpen = false" class="px-3 py-1 text-slate-600">Cancel</button>
-                    <button type="submit" class="px-3 py-1 bg-indigo-600 text-white rounded font-semibold">Save Log</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Script Logic -->
-    <script>
-        let supabaseClient;
-        try {
-            if (typeof SUPABASE_URL !== 'undefined' && typeof SUPABASE_ANON_KEY !== 'undefined') {
-                supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-            } else {
-                console.error('config.js missing SUPABASE_URL / SUPABASE_ANON_KEY');
-            }
-        } catch (e) {
-            console.error('Initialization error:', e);
-        }
-
-        function cloudApp() {
-            return {
-                loading: true,
-                errorMessage: '',
-                toastMessage: '',
-                activeTab: 'schools',
-                search: '',
-                divisionFilter: '',
-                interestFilter: '',
-                majorFilter: '',
-                newMajorName: '',
-                schools: [],
-                divisions: [],
-                interestLevels: [],
-                allMajors: [],
-                profileItems: [],
-                profileCategories: ['Contact & Personal', 'Coaches & Team', 'Academics & Honors', 'Athletic Info', 'Links & Tournaments'],
-                logs: [],
-                schoolModalOpen: false,
-                logModalOpen: false,
-                editingId: null,
-                schoolForm: { name: '', division: '', mascot: '', interest: 'High Interest', coaches: [], camps: [], selectedMajorIds: [] },
-                logForm: { school_id: '', type: 'Email Sent', date: new Date().toISOString().split('T')[0], summary: '', details: '' },
-
-                async init() {
-                    if (!supabaseClient) {
-                        this.errorMessage = 'Supabase client failed to initialize. Check config.js.';
-                        this.loading = false;
-                        return;
-                    }
-                    await this.fetchData();
-                },
-
-                async fetchData() {
-                    this.loading = true;
-                    this.errorMessage = '';
-
-                    const { data: divisionsData } = await supabaseClient.from('divisions').select('*').order('name');
-                    if (divisionsData) this.divisions = divisionsData;
-
-                    const { data: interestData } = await supabaseClient.from('interest_levels').select('*').order('name');
-                    if (interestData) this.interestLevels = interestData;
-
-                    const { data: majorsData } = await supabaseClient.from('majors').select('*').order('name');
-                    if (majorsData) this.allMajors = majorsData;
-
-                    const { data: profileData } = await supabaseClient.from('player_profile').select('*').order('display_order', { ascending: true });
-                    if (profileData) {
-                        this.profileItems = profileData.map(item => ({ ...item, newItemText: '' }));
-                    }
-
-                    const { data: schoolsData, error: schoolsError } = await supabaseClient
-                        .from('schools')
-                        .select('*, coaches(*), camps(*), school_majors(major_id, majors(id, name))')
-                        .order('name');
-
-                    if (schoolsError) {
-                        this.errorMessage = 'Database Error: ' + schoolsError.message;
-                    } else {
-                        this.schools = (schoolsData || []).map(s => {
-                            const majorsList = s.school_majors ? s.school_majors.map(sm => sm.majors).filter(Boolean) : [];
-                            return { ...s, majors: majorsList };
-                        });
-                    }
-
-                    const { data: logsData } = await supabaseClient.from('communication_logs').select('*').order('date', { ascending: false });
-                    if (logsData) this.logs = logsData;
-
-                    this.loading = false;
-                },
-
-                profileItemsByCategory(category) {
-                    return this.profileItems.filter(item => item.category === category);
-                },
-
-                async updateProfileItem(item) {
-                    await supabaseClient.from('player_profile').update({ data: item.data }).eq('id', item.id);
-                    this.showToast(`Updated ${item.label}`);
-                },
-
-                async deleteProfileField(id) {
-                    if (confirm('Delete this field?')) {
-                        await supabaseClient.from('player_profile').delete().eq('id', id);
-                        this.profileItems = this.profileItems.filter(i => i.id !== id);
-                        this.showToast('Field deleted');
-                    }
-                },
-
-                addListItem(item) {
-                    if (!item.newItemText || !item.newItemText.trim()) return;
-                    if (!item.data.items) item.data.items = [];
-                    item.data.items.push(item.newItemText.trim());
-                    item.newItemText = '';
-                    this.updateProfileItem(item);
-                },
-
-                removeListItem(item, idx) {
-                    item.data.items.splice(idx, 1);
-                    this.updateProfileItem(item);
-                },
-
-                copyToClipboard(text, label) {
-                    if (!text) {
-                        this.showToast('No value to copy!');
-                        return;
-                    }
-                    navigator.clipboard.writeText(text);
-                    this.showToast(`Copied ${label}!`);
-                },
-
-                copyAddress(addr, label) {
-                    const full = `${addr.street || ''}, ${addr.city || ''}, ${addr.state || ''} ${addr.zip || ''}`.trim();
-                    this.copyToClipboard(full, label);
-                },
-
-                showToast(msg) {
-                    this.toastMessage = msg;
-                    setTimeout(() => { this.toastMessage = ''; }, 2500);
-                },
-
-                get filteredSchools() {
-                    return this.schools.filter(s => {
-                        const nameMatch = s.name ? s.name.toLowerCase().includes(this.search.toLowerCase()) : false;
-                        const coachMatch = s.coaches ? s.coaches.some(c => c.name && c.name.toLowerCase().includes(this.search.toLowerCase())) : false;
-                        const matchSearch = nameMatch || coachMatch;
-                        const matchDiv = this.divisionFilter === '' || s.division === this.divisionFilter;
-                        const matchInterest = this.interestFilter === '' || s.interest === this.interestFilter;
-                        const matchMajor = this.majorFilter === '' || (s.majors && s.majors.some(m => String(m.id) === String(this.majorFilter)));
-                        return matchSearch && matchDiv && matchInterest && matchMajor;
-                    });
-                },
-
-                get sortedLogs() { return this.logs; },
-
-                getSchoolName(id) {
-                    const sch = this.schools.find(s => s.id === id);
-                    return sch ? sch.name : 'Unknown School';
-                },
-
-                async addNewMajor() {
-                    if (!this.newMajorName.trim()) return;
-                    const { data, error } = await supabaseClient.from('majors').insert([{ name: this.newMajorName.trim() }]).select().single();
-                    if (!error && data) {
-                        this.allMajors.push(data);
-                        this.schoolForm.selectedMajorIds.push(data.id);
-                        this.newMajorName = '';
-                    }
-                },
-
-                openSchoolModal() {
-                    this.editingId = null;
-                    this.schoolForm = { name: '', division: '', mascot: '', interest: 'High Interest', coaches: [], camps: [], selectedMajorIds: [] };
-                    this.schoolModalOpen = true;
-                },
-
-                editSchool(school) {
-                    this.editingId = school.id;
-                    this.schoolForm = {
-                        name: school.name,
-                        division: school.division,
-                        mascot: school.mascot,
-                        interest: school.interest || 'High Interest',
-                        coaches: school.coaches ? JSON.parse(JSON.stringify(school.coaches)) : [],
-                        camps: school.camps ? JSON.parse(JSON.stringify(school.camps)) : [],
-                        selectedMajorIds: school.majors ? school.majors.map(m => m.id) : []
-                    };
-                    this.schoolModalOpen = true;
-                },
-
-                addCoachRow() {
-                    this.schoolForm.coaches.push({ name: '', role: 'Coach', email: '' });
-                },
-
-                removeCoachRow(idx) {
-                    this.schoolForm.coaches.splice(idx, 1);
-                },
-
-                addCampRow() {
-                    this.schoolForm.camps.push({ name: 'Prospect Camp', camp_date: '' });
-                },
-
-                removeCampRow(idx) {
-                    this.schoolForm.camps.splice(idx, 1);
-                },
-
-                async saveSchool() {
-                    this.loading = true;
-                    let schoolId = this.editingId;
-
-                    if (schoolId) {
-                        await supabaseClient.from('schools').update({
-                            name: this.schoolForm.name,
-                            division: this.schoolForm.division,
-                            mascot: this.schoolForm.mascot,
-                            interest: this.schoolForm.interest
-                        }).eq('id', schoolId);
-                    } else {
-                        const { data } = await supabaseClient.from('schools').insert([{
-                            name: this.schoolForm.name,
-                            division: this.schoolForm.division,
-                            mascot: this.schoolForm.mascot,
-                            interest: this.schoolForm.interest
-                        }]).select().single();
-                        if (data) schoolId = data.id;
-                    }
-
-                    if (schoolId) {
-                        await supabaseClient.from('coaches').delete().eq('school_id', schoolId);
-                        if (this.schoolForm.coaches.length > 0) {
-                            const coachPayload = this.schoolForm.coaches.map(c => ({ school_id: schoolId, name: c.name, role: c.role, email: c.email }));
-                            await supabaseClient.from('coaches').insert(coachPayload);
-                        }
-
-                        await supabaseClient.from('camps').delete().eq('school_id', schoolId);
-                        if (this.schoolForm.camps.length > 0) {
-                            const campPayload = this.schoolForm.camps.map(c => ({ school_id: schoolId, name: c.name, camp_date: c.camp_date }));
-                            await supabaseClient.from('camps').insert(campPayload);
-                        }
-
-                        await supabaseClient.from('school_majors').delete().eq('school_id', schoolId);
-                        if (this.schoolForm.selectedMajorIds.length > 0) {
-                            const majorPayload = this.schoolForm.selectedMajorIds.map(mId => ({ school_id: schoolId, major_id: mId }));
-                            await supabaseClient.from('school_majors').insert(majorPayload);
-                        }
-                    }
-
-                    this.schoolModalOpen = false;
-                    await this.fetchData();
-                },
-
-                async deleteSchool(id) {
-                    if (confirm('Delete this program and all associated details?')) {
-                        await supabaseClient.from('schools').delete().eq('id', id);
-                        await this.fetchData();
-                    }
-                },
-
-                openLogModal() {
-                    this.logForm = { school_id: '', type: 'Email Sent', date: new Date().toISOString().split('T')[0], summary: '', details: '' };
-                    this.logModalOpen = true;
-                },
-
-                async saveLog() {
-                    await supabaseClient.from('communication_logs').insert([this.logForm]);
-                    this.logModalOpen = false;
-                    await this.fetchData();
-                },
-
-                async deleteLog(id) {
-                    await supabaseClient.from('communication_logs').delete().eq('id', id);
-                    await this.fetchData();
-                },
-
-                exportCSV() {
-                    let csv = 'College,Division,Mascot,Interest,Majors,Coaches,Camps\n';
-                    this.schools.forEach(s => {
-                        const majorNames = s.majors ? s.majors.map(m => m.name).join('; ') : '';
-                        const coachNames = s.coaches ? s.coaches.map(c => `${c.name} (${c.role || 'Coach'})`).join('; ') : '';
-                        const campDates = s.camps ? s.camps.map(c => `${c.name || 'Camp'}: ${c.camp_date}`).join('; ') : '';
-                        csv += `"${s.name}","${s.division || ''}","${s.mascot || ''}","${s.interest || ''}","${majorNames}","${coachNames}","${campDates}"\n`;
-                    });
-                    const blob = new Blob([csv], { type: 'text/csv' });
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.setAttribute('href', url);
-                    a.setAttribute('download', 'frankie_recruiting_contacts.csv');
-                    a.click();
-                }
-            }
-        }
-    </script>
-</body>
-</html>
+-- 1. Clean up old profile tables if they exist
+DROP TABLE IF EXISTS player_profile_socials;
+DROP TABLE IF EXISTS player_profile_contacts;
+DROP TABLE IF EXISTS player_profile_tournaments;
+DROP TABLE IF EXISTS player_profile;
+
+-- 2. Main Player Profile Attributes (Academic, Athletic, Personal Info)
+CREATE TABLE IF NOT EXISTS player_profile (
+    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    category TEXT NOT NULL,          -- 'Personal', 'Academics', 'Athletic'
+    label TEXT NOT NULL,             -- e.g. 'Cell Phone', 'NCAA ID', '2026 High School Stats'
+    value TEXT,                      -- The actual value to copy
+    display_order INT DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 3. Social Media Accounts (Twitter/X, Instagram, Facebook)
+CREATE TABLE IF NOT EXISTS player_profile_socials (
+    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    platform TEXT NOT NULL,          -- 'Twitter / X', 'Instagram', 'Facebook'
+    handle TEXT NOT NULL,            -- e.g. '@FrankieW2028'
+    display_order INT DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 4. Key Contacts (High School Coach, Club Coach, Counselor)
+CREATE TABLE IF NOT EXISTS player_profile_contacts (
+    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    role_title TEXT NOT NULL,        -- 'High School Coach', 'Club Team & Coach', 'High School Counselor'
+    contact_name TEXT NOT NULL,      -- e.g. 'Nina Green'
+    email TEXT,                      -- e.g. 'agreen@fifeschools.com'
+    phone TEXT,                      -- e.g. '253-260-9798'
+    display_order INT DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 5. Tournaments with start/end dates and locations
+CREATE TABLE IF NOT EXISTS player_profile_tournaments (
+    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    tournament_name TEXT NOT NULL,
+    start_date DATE,
+    end_date DATE,
+    city TEXT,
+    state TEXT,
+    display_order INT DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Enable RLS & Policies
+ALTER TABLE player_profile ENABLE ROW LEVEL SECURITY;
+ALTER TABLE player_profile_socials ENABLE ROW LEVEL SECURITY;
+ALTER TABLE player_profile_contacts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE player_profile_tournaments ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow public read/write on player_profile" ON player_profile FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public read/write on socials" ON player_profile_socials FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public read/write on contacts" ON player_profile_contacts FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public read/write on tournaments" ON player_profile_tournaments FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- Seed Initial Data from Spreadsheet
+INSERT INTO player_profile (category, label, value, display_order) VALUES
+('Personal', 'Cell Phone', '253-281-8725', 1),
+('Personal', 'Email', 'frankiewolfrom2028@gmail.com', 2),
+('Personal', 'Address', '12311 20th St E, Edgewood, WA 98372', 3),
+('Academics', 'NCAA Eligibility ID', '2604863017', 4),
+('Academics', 'Academic Honors', '2025 & 2026 2A SPSL All-Academic List', 5),
+('Athletic', 'Athletic Honors & Awards', '2026 SPSL Pitcher of the Year, 2025 SPSL Honorable Mention (Pitcher), TNT Athlete of the Week Finalist (Spring 2026), 2x Fife HS Athlete of the Week (Spring 2026)', 6),
+('Athletic', '2026 High School Stats', '65 IP | 18 Games (14 Starts) | 7-4 Record | 78H, 58R, 34ER, 31BB, 87K | 3.66 ERA | 1.68 WHIP | .285 BAA', 7),
+('Links', 'Skills Video / YouTube', 'https://www.youtube.com/watch?v=mjRsWgFGFIc', 8);
+
+INSERT INTO player_profile_socials (platform, handle, display_order) VALUES
+('Twitter / X', '@FrankieW2028', 1),
+('Instagram', '@frankie_softball2028', 2),
+('Facebook', '', 3);
+
+INSERT INTO player_profile_contacts (role_title, contact_name, email, phone, display_order) VALUES
+('High School Coach', 'Nina Green', 'agreen@fifeschools.com', '253-260-9798', 1),
+('Club Team & Coach', 'New Level 18U Pardey (Tiffany Pardey)', 'tiffanypardey@newlevelsoftball.com', '425-829-7800', 2),
+('High School Counselor', 'Lisa Hope', 'lhope@fifeschools.com', '253-517-1100', 3);
+
+INSERT INTO player_profile_tournaments (tournament_name, start_date, end_date, city, state, display_order) VALUES
+('USA Flame Invite', NULL, NULL, '', '', 1),
+('USA Octoberfest', NULL, NULL, '', '', 2),
+('USA Scaretastic 2', NULL, NULL, '', '', 3),
+('TCF City of Lights 2', NULL, NULL, '', '', 4);
