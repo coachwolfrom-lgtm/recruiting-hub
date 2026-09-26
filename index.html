@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frankie's Softball Recruiting Hub</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans" x-data="cloudApp()" x-init="init()">
+
+    <!-- Header -->
+    <header class="bg-indigo-900 text-white shadow-md sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-3">
+            <div>
+                <h1 class="text-xl font-bold flex items-center gap-2">
+                    <i class="fa-solid fa-baseball-bat-ball text-amber-400"></i> Frankie's Recruiting Hub
+                </h1>
+                <p class="text-indigo-200 text-xs">Cloud-Synced Across All Devices</p>
+            </div>
+            <div class="flex gap-2 w-full sm:w-auto justify-end">
+                <button @click="openSchoolModal()" class="bg-amber-500 hover:bg-amber-600 text-indigo-950 font-semibold px-3 py-1.5 rounded-lg text-sm shadow transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-plus"></i> Add School
+                </button>
+                <button @click="openLogModal()" class="bg-indigo-700 hover:bg-indigo-600 text-white font-semibold px-3 py-1.5 rounded-lg text-sm shadow transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-comments"></i> Log Note
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Dashboard -->
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        
+        <!-- Loading Spinner -->
+        <div x-show="loading" class="text-center py-20">
+            <i class="fa-solid fa-spinner fa-spin text-3xl text-indigo-600 mb-2"></i>
+            <p class="text-sm text-slate-500">Syncing with cloud database...</p>
+        </div>
+
+        <div x-show="!loading" x-cloak>
+            <!-- Tabs -->
+            <div class="flex border-b border-slate-200 mb-6 gap-6">
+                <button @click="activeTab = 'schools'" :class="activeTab === 'schools' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'" class="pb-2 border-b-2 font-semibold text-sm transition">
+                    College Programs (<span x-text="schools.length"></span>)
+                </button>
+                <button @click="activeTab = 'timeline'" :class="activeTab === 'timeline' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'" class="pb-2 border-b-2 font-semibold text-sm transition">
+                    Communication Log (<span x-text="logs.length"></span>)
+                </button>
+            </div>
+
+            <!-- TAB 1: Schools -->
+            <div x-show="activeTab === 'schools'">
+                <div class="flex flex-col sm:flex-row justify-between gap-3 mb-6">
+                    <input type="text" x-model="search" placeholder="Search college, mascot, coach..." class="w-full sm:w-72 px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+                    <div class="flex gap-2">
+                        <select x-model="divisionFilter" class="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+                            <option value="">All Divisions</option>
+                            <option value="DI">DI</option>
+                            <option value="DII">DII</option>
+                            <option value="DIII">DIII</option>
+                            <option value="NAIA">NAIA</option>
+                            <option value="NWAC">NWAC</option>
+                            <option value="GNAC">GNAC</option>
+                        </select>
+                        <button @click="exportCSV()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 rounded-lg text-xs font-semibold text-slate-700">Export CSV</button>
+                    </div>
+                </div>
+
+                <!-- Schools Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <template x-for="school in filteredSchools" :key="school.id">
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col justify-between">
+                            <div>
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 uppercase" x-text="school.division"></span>
+                                        <h3 class="text-base font-bold text-slate-900 mt-1" x-text="school.name"></h3>
+                                        <p class="text-xs text-slate-500" x-text="school.mascot ? 'Mascot: ' + school.mascot : ''"></p>
+                                    </div>
+                                    <span class="text-xs font-semibold px-2 py-0.5 rounded bg-amber-50 text-amber-700" x-text="school.interest || 'Tracking'"></span>
+                                </div>
+
+                                <div class="mt-3 pt-3 border-t border-slate-100 text-xs space-y-1">
+                                    <div><span class="font-semibold text-slate-600">Head Coach:</span> <span x-text="school.head_coach || '—'"></span></div>
+                                    <div><span class="font-semibold text-slate-600">Assistant/Coach:</span> <span x-text="school.coach || '—'"></span></div>
+                                    <div x-show="school.camp"><span class="font-semibold text-rose-600">Camp Date:</span> <span class="font-semibold text-rose-600" x-text="school.camp"></span></div>
+                                </div>
+                            </div>
+
+                            <div class="mt-4 pt-2 border-t border-slate-100 flex justify-between items-center text-xs">
+                                <button @click="editSchool(school)" class="text-slate-600 hover:text-indigo-600 font-medium"><i class="fa-solid fa-pen"></i> Edit</button>
+                                <button @click="deleteSchool(school.id)" class="text-rose-500 hover:text-rose-700"><i class="fa-solid fa-trash"></i></button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- TAB 2: Timeline -->
+            <div x-show="activeTab === 'timeline'">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3">
+                    <template x-for="log in sortedLogs" :key="log.id">
+                        <div class="p-3 rounded-lg border border-slate-100 bg-slate-50 flex justify-between items-start">
+                            <div>
+                                <div class="flex items-center gap-2 text-xs">
+                                    <span class="font-bold text-indigo-900" x-text="getSchoolName(log.school_id)"></span>
+                                    <span class="text-slate-400" x-text="log.date"></span>
+                                    <span class="bg-slate-200 px-1.5 py-0.2 rounded text-[10px]" x-text="log.type"></span>
+                                </div>
+                                <p class="text-sm font-medium text-slate-800 mt-1" x-text="log.summary"></p>
+                                <p class="text-xs text-slate-500" x-text="log.details"></p>
+                            </div>
+                            <button @click="deleteLog(log.id)" class="text-slate-400 hover:text-rose-500 text-xs"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- School Modal -->
+    <div x-show="schoolModalOpen" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" x-cloak>
+        <div class="bg-white rounded-xl max-w-md w-full p-5 space-y-3">
+            <h3 class="text-lg font-bold" x-text="editingId ? 'Edit Program' : 'Add Program'"></h3>
+            <form @submit.prevent="saveSchool()" class="space-y-3 text-xs">
+                <div>
+                    <label class="font-semibold block mb-1">College Name</label>
+                    <input type="text" x-model="schoolForm.name" required class="w-full p-2 border rounded">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="font-semibold block mb-1">Division</label>
+                        <input type="text" x-model="schoolForm.division" class="w-full p-2 border rounded">
+                    </div>
+                    <div>
+                        <label class="font-semibold block mb-1">Mascot</label>
+                        <input type="text" x-model="schoolForm.mascot" class="w-full p-2 border rounded">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="font-semibold block mb-1">Head Coach</label>
+                        <input type="text" x-model="schoolForm.head_coach" class="w-full p-2 border rounded">
+                    </div>
+                    <div>
+                        <label class="font-semibold block mb-1">Assistant Coach</label>
+                        <input type="text" x-model="schoolForm.coach" class="w-full p-2 border rounded">
+                    </div>
+                </div>
+                <div>
+                    <label class="font-semibold block mb-1">Camp Date (if applicable)</label>
+                    <input type="text" x-model="schoolForm.camp" placeholder="e.g. 9/26/26" class="w-full p-2 border rounded">
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" @click="schoolModalOpen = false" class="px-3 py-1 text-slate-600">Cancel</button>
+                    <button type="submit" class="px-3 py-1 bg-indigo-600 text-white rounded font-semibold">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Log Interaction Modal -->
+    <div x-show="logModalOpen" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" x-cloak>
+        <div class="bg-white rounded-xl max-w-md w-full p-5 space-y-3">
+            <h3 class="text-lg font-bold">Log Coach Interaction</h3>
+            <form @submit.prevent="saveLog()" class="space-y-3 text-xs">
+                <div>
+                    <label class="font-semibold block mb-1">College Program</label>
+                    <select x-model="logForm.school_id" required class="w-full p-2 border rounded bg-white">
+                        <option value="">Select School...</option>
+                        <template x-for="s in schools" :key="s.id">
+                            <option :value="s.id" x-text="s.name"></option>
+                        </template>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="font-semibold block mb-1">Type</label>
+                        <select x-model="logForm.type" class="w-full p-2 border rounded bg-white">
+                            <option value="Email Sent">Email Sent</option>
+                            <option value="Coach Reply">Coach Reply</option>
+                            <option value="Phone Call">Phone Call</option>
+                            <option value="Camp Attended">Camp Attended</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="font-semibold block mb-1">Date</label>
+                        <input type="date" x-model="logForm.date" required class="w-full p-2 border rounded">
+                    </div>
+                </div>
+                <div>
+                    <label class="font-semibold block mb-1">Summary</label>
+                    <input type="text" x-model="logForm.summary" required placeholder="e.g., Sent Fall showcase schedule" class="w-full p-2 border rounded">
+                </div>
+                <div>
+                    <label class="font-semibold block mb-1">Details</label>
+                    <textarea x-model="logForm.details" rows="2" class="w-full p-2 border rounded" placeholder="Coach feedback or notes..."></textarea>
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" @click="logModalOpen = false" class="px-3 py-1 text-slate-600">Cancel</button>
+                    <button type="submit" class="px-3 py-1 bg-indigo-600 text-white rounded font-semibold">Save Log</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Script Logic with Supabase -->
+    <script>
+        const SUPABASE_URL = 'YOUR_SUPABASE_URL_HERE';
+        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY_HERE';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        function cloudApp() {
+            return {
+                loading: true,
+                activeTab: 'schools',
+                search: '',
+                divisionFilter: '',
+                schools: [],
+                logs: [],
+                schoolModalOpen: false,
+                logModalOpen: false,
+                editingId: null,
+                schoolForm: { name: '', division: '', mascot: '', head_coach: '', coach: '', camp: '', interest: 'High Interest' },
+                logForm: { school_id: '', type: 'Email Sent', date: new Date().toISOString().split('T')[0], summary: '', details: '' },
+
+                async init() {
+                    await this.fetchData();
+                },
+
+                async fetchData() {
+                    this.loading = true;
+                    let { data: schools } = await supabaseClient.from('schools').select('*').order('name');
+                    let { data: logs } = await supabaseClient.from('communication_logs').select('*').order('date', { ascending: false });
+                    this.schools = schools || [];
+                    this.logs = logs || [];
+                    this.loading = false;
+                },
+
+                get filteredSchools() {
+                    return this.schools.filter(s => {
+                        const matchSearch = s.name.toLowerCase().includes(this.search.toLowerCase()) || (s.head_coach && s.head_coach.toLowerCase().includes(this.search.toLowerCase()));
+                        const matchDiv = this.divisionFilter === '' || s.division === this.divisionFilter;
+                        return matchSearch && matchDiv;
+                    });
+                },
+
+                get sortedLogs() { return this.logs; },
+
+                getSchoolName(id) {
+                    const sch = this.schools.find(s => s.id === id);
+                    return sch ? sch.name : 'Unknown School';
+                },
+
+                openSchoolModal() {
+                    this.editingId = null;
+                    this.schoolForm = { name: '', division: '', mascot: '', head_coach: '', coach: '', camp: '', interest: 'High Interest' };
+                    this.schoolModalOpen = true;
+                },
+
+                editSchool(school) {
+                    this.editingId = school.id;
+                    this.schoolForm = { ...school };
+                    this.schoolModalOpen = true;
+                },
+
+                async saveSchool() {
+                    if (this.editingId) {
+                        await supabaseClient.from('schools').update(this.schoolForm).eq('id', this.editingId);
+                    } else {
+                        await supabaseClient.from('schools').insert([this.schoolForm]);
+                    }
+                    this.schoolModalOpen = false;
+                    await this.fetchData();
+                },
+
+                async deleteSchool(id) {
+                    if (confirm('Delete this program?')) {
+                        await supabaseClient.from('schools').delete().eq('id', id);
+                        await this.fetchData();
+                    }
+                },
+
+                openLogModal() {
+                    this.logForm = { school_id: '', type: 'Email Sent', date: new Date().toISOString().split('T')[0], summary: '', details: '' };
+                    this.logModalOpen = true;
+                },
+
+                async saveLog() {
+                    await supabaseClient.from('communication_logs').insert([this.logForm]);
+                    this.logModalOpen = false;
+                    await this.fetchData();
+                },
+
+                async deleteLog(id) {
+                    await supabaseClient.from('communication_logs').delete().eq('id', id);
+                    await this.fetchData();
+                },
+
+                exportCSV() {
+                    let csv = 'College,Division,Mascot,Head Coach,Coach,Camp\n';
+                    this.schools.forEach(s => {
+                        csv += `"${s.name}","${s.division || ''}","${s.mascot || ''}","${s.head_coach || ''}","${s.coach || ''}","${s.camp || ''}"\n`;
+                    });
+                    const blob = new Blob([csv], { type: 'text/csv' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.setAttribute('href', url);
+                    a.setAttribute('download', 'frankie_recruiting_contacts.csv');
+                    a.click();
+                }
+            }
+        }
+    </script>
+</body>
+</html>
